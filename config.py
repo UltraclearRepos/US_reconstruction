@@ -1,87 +1,36 @@
 from pathlib import Path
 
 
-# ============================================================
-# PATHS
-# ============================================================
-
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"
 
 RAW_DIR = DATA_DIR / "raw"
-FOR_RECON_DIR = DATA_DIR / "for_reconstruction"
+PREPARED_DIR = DATA_DIR / "prepared"
 DENOISED_DIR = DATA_DIR / "denoised"
-SEGMENTATION_DIR = DATA_DIR / "segmentations"
+SEGMENTED_DIR = DATA_DIR / "segmented"
 RECONSTRUCTED_DIR = DATA_DIR / "reconstructed"
+RECONSTRUCTED_INTENSITY_DIR = RECONSTRUCTED_DIR / "intensity"
+RECONSTRUCTED_SEGMENTATION_DIR = RECONSTRUCTED_DIR / "segmentation"
 GROUND_TRUTH_DIR = DATA_DIR / "ground_truth"
-EVALUATION_DIR = DATA_DIR / "evaluation"
+SURFACES_DIR = DATA_DIR / "surfaces"
+GROUND_TRUTH_SURFACES_DIR = SURFACES_DIR / "ground_truth"
+PREDICTED_SURFACES_DIR = SURFACES_DIR / "predicted"
 
+REPORTS_DIR = ROOT / "reports"
+EVALUATION_DIR = REPORTS_DIR / "evaluation"
+RUNS_DIR = ROOT / "runs"
+UNSUPERVISED_RUNS_DIR = RUNS_DIR / "unsupervised"
 SEGMENTATION_MODELS_DIR = ROOT / "models" / "segmentation"
 UNSUPERVISED_REPO_DIR = ROOT / "external" / "UnsupervisedSegmentor4Ultrasound"
 
 
-# ============================================================
-# MAIN SWITCHES
-# ============================================================
-
-RUN_DATA_LOADING = False
-RUN_DENOISING = False
-RUN_SEGMENTATION = False
-RUN_UNSUPERVISED_SEGMENTATION = False
-RUN_UNSUPERVISED_OUTPUT_LOADING = True
-
-RUN_RECONSTRUCT_INTENSITY = False
-RUN_RECONSTRUCTION = True
-RUN_ISOSURFACE_EXTRACTION = False
-
-RUN_NAPARI_VIS = False
-RUN_SIMPLE_VIS = False
-
-RUN_EVALUATION = True
-
-
-# ============================================================
-# EVALUATION SWITCHES
-# ============================================================
-
-RUN_EVAL_RECONSTRUCTION_WITH_GT = False
-RUN_EVAL_SEGMENTATION = False
-RUN_EVAL_NO_REFERENCE = True
-
-
-# ============================================================
-# CASE SELECTION
-# ============================================================
-
-CASE_NAMES = [
-    "kosartur",
-]
-
-
-# ============================================================
-# DATA LOADING
-# ============================================================
-
+# DICOM preparation
 VERBOSE = True
-SAVE_IMAGES_NPY = True
-SAVE_POSES_NPY = True
 CONVERT_IMAGE_TO_FLOAT32 = True
-
 IMAGE_DATASET_NAME = "img"
-POSE_DATASET_NAME = "poses"
 
 
-# ============================================================
-# DENOISING
-# ============================================================
-
-DENOISING_METHODS = [
-    "rdpad",
-]
-
-DENOISING_WRITE_BACK_TO_FOR_RECONSTRUCTION = True
-DENOISING_OUTPUT_CASE_SUFFIX = "_denoised"
-
+# Denoising
 RDPAD_ITERATIONS = 100
 RDPAD_TIMESTEP = 0.20
 RDPAD_Q0_MODE = "median"
@@ -93,91 +42,50 @@ MEDIAN_SIZE = 3
 BILATERAL_SIGMA_COLOR = 0.05
 BILATERAL_SIGMA_SPATIAL = 3.0
 
-NLM_H_FACTOR = 0.8
-NLM_PATCH_SIZE = 5
-NLM_PATCH_DISTANCE = 6
-
 TV_WEIGHT = 0.08
 TV_MAX_NUM_ITER = 200
 
 
-# ============================================================
-# SUPERVISED SEGMENTATION
-# ============================================================
-
+# Supervised segmentation
 SEGMENTATION_MODEL_NAME = "rdpad"
-
 SEGMENTATION_MODEL_FILE = "best_model_traced.pt"
 SEGMENTATION_MODEL_META_FILE = "best_model_export_meta.json"
-
 SEGMENTATION_IMAGE_KEY = None
 SEGMENTATION_DEVICE = None
 SEGMENTATION_NORMALIZATION = "auto"
 
-SEGMENTATION_CLASSES_TO_EXPORT = [1, 2, 3, 4, 5]
-SEGMENTATION_SKIP_BACKGROUND = True
-
-SEGMENTATION_OUTPUT_CASE_SUFFIX = "_seg"
-SEGMENTATION_WRITE_TO_FOR_RECONSTRUCTION = True
-SEGMENTATION_SAVE_FRAME_MASKS = True
-
-SEGMENTATION_MASKED_IMAGE_VALUE = "masked_intensity"
-RECONSTRUCT_SEGMENTATION_OUTPUT = True
-
-
-# ============================================================
-# UNSUPERVISED SEGMENTATION
-# ============================================================
-
+# Unsupervised segmentation
 UNSUPERVISED_REPO_URL = "https://github.com/alexaatm/UnsupervisedSegmentor4Ultrasound.git"
 UNSUPERVISED_DINOV2_REPO_URL = "https://github.com/3cology/dinov2_with_attention_extraction.git"
-
 UNSUPERVISED_ALLOW_GIT_CLONE = False
-
 UNSUPERVISED_DATASET_NAME = "DATASET1"
-UNSUPERVISED_CASE_NAME = "kosartur_unsupervised"
-
+UNSUPERVISED_CASE_NAME = "current_case"
 UNSUPERVISED_IMAGE_KEY = None
-
 UNSUPERVISED_FRAME_START = 0
 UNSUPERVISED_FRAME_END = None
 UNSUPERVISED_FRAME_STEP = 1
-
 UNSUPERVISED_PNG_NORMALIZATION = "percentile"
 UNSUPERVISED_P_LOW = 1.0
 UNSUPERVISED_P_HIGH = 99.0
-
 UNSUPERVISED_N_CLASSES = 15
 UNSUPERVISED_SEGMENTS_NUM = [30]
 UNSUPERVISED_CLUSTERS_NUM = [15]
-
-UNSUPERVISED_WANDB_PROJECT = "kosartur_unsupervised"
-UNSUPERVISED_WANDB_ENTITY = "mpniak-agh"
+UNSUPERVISED_WANDB_PROJECT = "ultrasound_unsupervised"
+UNSUPERVISED_WANDB_ENTITY = ""
 UNSUPERVISED_WANDB_MODE = "disabled"
 UNSUPERVISED_USE_WANDB_DISABLED = True
 UNSUPERVISED_WANDB_KEY = ""
-UNSUPERVISED_WANDB_TAG = "test1"
-
+UNSUPERVISED_WANDB_TAG = "run"
 UNSUPERVISED_PYTHON_EXECUTABLE = "python"
-
 UNSUPERVISED_OVERWRITE_CONFIGS = True
 UNSUPERVISED_OVERWRITE_DATASET = True
-
 UNSUPERVISED_NORM = "none"
 UNSUPERVISED_INV = False
 UNSUPERVISED_GAUSS_BLUR = False
 UNSUPERVISED_GAUSS_TETA = 1.0
 UNSUPERVISED_HIST_EQ = False
-
 UNSUPERVISED_BATCH_SIZE = 1
-
-
-# ============================================================
-# UNSUPERVISED SPECTRAL SETTINGS
-# ============================================================
-
 UNSUPERVISED_IMAGE_DOWNSAMPLE_FACTOR = 7
-
 UNSUPERVISED_C_DINO = 1.0
 UNSUPERVISED_C_SSD_KNN = 0.0
 UNSUPERVISED_C_VAR_KNN = 0.0
@@ -188,62 +96,29 @@ UNSUPERVISED_C_LNCC = 0.0
 UNSUPERVISED_C_SSIM = 0.0
 UNSUPERVISED_C_MI = 0.0
 UNSUPERVISED_C_SAM = 0.0
-
-
-# ============================================================
-# UNSUPERVISED OUTPUT IMPORT
-# ============================================================
-
 UNSUPERVISED_IMPORT_USE_CRF = True
 UNSUPERVISED_IMPORT_MODEL_NAME = "unsupervised_crf"
-
-UNSUPERVISED_IMPORT_TO_FOR_RECONSTRUCTION = True
-UNSUPERVISED_IMPORT_TO_SEGMENTATION_DIR = True
 UNSUPERVISED_IMPORT_OVERWRITE = True
 
-UNSUPERVISED_OUTPUT_IMPORT_CASES = [
-    {
-        "base_case": "kosartur",
-        "denoising_method": "rdpad",
-        "segments_num": 30,
-        "clusters_num": 15,
-        "use_crf": True,
-        "model_name": "unsupervised_crf",
-        "output_case": None,
-    },
-]
 
-UNSUPERVISED_OUTPUT_IMPORTS = []
-
-
-# ============================================================
-# RECONSTRUCTION
-# ============================================================
-
-RECONSTRUCTION_METHODS = [
-    "voxel_nearest",
-]
-
-RECONSTRUCTION_SAVE_METHOD_SUBDIRS = True
-
+# Reconstruction
+# Used by both intensity and segmentation reconstruction.
+# Multiclass segmentation requires ["voxel_nearest"] because averaging methods
+# would produce invalid class IDs.
+RECONSTRUCTION_METHODS = ["voxel_nearest"]
 VOXEL_SIZE = (0.2, 0.2, 0.2)
 PIXEL_SPACING = None
-
 BACKGROUND_THRESHOLD = 0.0
-
 CENTER = True
 CHUNK_PIXELS = None
 IMAGE_KEY = None
-
-DEVICE = "cpu"
-
+DEVICE = "cuda"
 N_NEAREST = 4
 SPLINE_ORDER = 3
 DISTANCE_EPS = 1e-6
 DISTANCE_POWER = 1.0
 
 VNN_N_NEAREST = 1
-
 VNN_MEAN_N_NEAREST = 4
 
 DWR_N_NEAREST = 4
@@ -253,57 +128,27 @@ DWR_INTERP = "bilinear"
 DWR_MAX_PLANE_DIST = None
 
 
-# ============================================================
-# ISOSURFACE EXTRACTION
-# ============================================================
-
-ISO_SOURCE_SUBDIR = "segmentations"
-ISO_PATTERN = "*.npz"
-ISO_LEVEL = None
-ISO_THR_RATIO = 0.10
+# Isosurfaces
 ISO_MIN_VOXELS = 20
 ISO_STEP_SIZE = 1
 ISO_SAVE_OBJ = True
+ISO_CLASSES = None
 
 
-# ============================================================
-# VISUALIZATION
-# ============================================================
-
-VIS_CASE = None
-
+# Visualization
 SHOW_RECONSTRUCTION = True
 SHOW_GROUND_TRUTH_VOLUME = True
 SHOW_SEGMENTATION_LABELS = True
-SHOW_SEGMENTATION_CLASSES = True
 SHOW_SURFACES = True
-
 NAPARI_NDISPLAY = 3
 
 
-# ============================================================
-# EVALUATION
-# ============================================================
-
-EVAL_RECON_METHODS = RECONSTRUCTION_METHODS
-
-EVAL_CASE_NAMES = [
-    "kosartur_denoised_rdpad_unsup_seg30_clust15_crf",
-]
-
-EVAL_GT_CASE_NAME_MAP = {}
-
-EVAL_SEGMENTATION_MODEL_NAME = "unsupervised_crf"
+# Evaluation
 EVAL_SEGMENTATION_CLASSES = [1, 2, 3, 4, 5]
-
 EVAL_EPS = 1e-8
 EVAL_HIST_BINS = 128
 EVAL_SURFACE_DICE_TOLERANCE_MM = 1.0
-
 EVAL_OBJECT_THRESHOLD = 0.0
-EVAL_BACKGROUND_THRESHOLD = 0.0
-
 EVAL_SSIM_AXIS = 0
 EVAL_MS_SSIM_ENABLED = True
-
 EVAL_NO_REFERENCE_USE_MASK = True

@@ -28,9 +28,6 @@ conda/
 # Main project data - DO NOT COMMIT
 # =========================
 data/
-datasets/
-raw_data/
-processed_data/
 
 # =========================
 # Outputs / results / experiments

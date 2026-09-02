@@ -5,289 +5,179 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
 from config import (
-    CASE_NAMES,
-
-    RUN_DATA_LOADING,
-    RUN_DENOISING,
-    RUN_SEGMENTATION,
-    RUN_UNSUPERVISED_SEGMENTATION,
-    RUN_UNSUPERVISED_OUTPUT_LOADING,
-    RUN_RECONSTRUCTION,
-    RUN_RECONSTRUCT_INTENSITY,
-    RUN_ISOSURFACE_EXTRACTION,
-    RUN_NAPARI_VIS,
-    RUN_SIMPLE_VIS,
-    RUN_EVALUATION,
-
-    RUN_EVAL_RECONSTRUCTION_WITH_GT,
-    RUN_EVAL_SEGMENTATION,
-    RUN_EVAL_NO_REFERENCE,
-
-    VIS_CASE,
-    RECONSTRUCT_SEGMENTATION_OUTPUT,
-    DENOISING_METHODS,
+    RECONSTRUCTION_METHODS,
+    SEGMENTATION_MODEL_NAME,
+    UNSUPERVISED_IMPORT_MODEL_NAME,
 )
 
-from data_loading.prepare_dicom import prepare_cases
-from data_loading.unsupervised_output_loader import import_unsupervised_outputs
 
-from denoising.runner import denoise_cases
-from segmentation.runner import segment_cases
-from unsupervised_segmentation.runner import run_unsupervised_segmentation
+# ============================================================
+# WHAT TO RUN
+# ============================================================
 
-from reconstruction.runner import reconstruct_cases
-from isosurface_extraction.extract import extract_surfaces_for_cases
+CASE_NAMES = ["kosartur"]
 
-from visualization.napari_viewer import visualize_case_napari
-from visualization.simple_viewer import visualize_case_simple
+# Used by:
+# - supervised segmentation,
+# - unsupervised segmentation,
+# - intensity reconstruction,
+# - segmentation variant selection for reconstruction, isosurface extraction,
+#   evaluation, and visualization.
+# Allowed values: "prepared" or "denoised".
+INPUT_SOURCE = "prepared"
 
-from evaluation.reconstruction_with_gt import evaluate_reconstruction_cases_with_gt
-from evaluation.segmentation_metrics import evaluate_segmentation_cases
-from evaluation.no_reference import evaluate_no_reference_cases
+# Used only when INPUT_SOURCE == "denoised".
+# Selects the data/denoised/<case>/<method>/ directory read by downstream stages.
+# It does not run denoising or select which variants are generated;
+# DENOISING_METHODS controls that separately.
+INPUT_DENOISING_METHOD = "rdpad"
 
+DENOISING_METHODS = ["rdpad"]
+SEGMENTATION_RESULT_MODELS = [SEGMENTATION_MODEL_NAME]
 
-def normalize_case_names(case_names):
-    if case_names is None:
-        return []
+RUN_PREPARE_DATA = False
+RUN_DENOISING = False
+RUN_SUPERVISED_SEGMENTATION = False
+RUN_UNSUPERVISED_SEGMENTATION = False
+RUN_IMPORT_UNSUPERVISED = False
+RUN_RECONSTRUCT_INTENSITY = False
+RUN_RECONSTRUCT_SEGMENTATION = False
+RUN_ISOSURFACE_EXTRACTION = False
+RUN_EVALUATION = False
+RUN_NAPARI_VIS = True
+RUN_SIMPLE_VIS = False
 
-    if isinstance(case_names, str):
-        return [case_names]
+RUN_EVAL_RECONSTRUCTION_WITH_GT = True
+RUN_EVAL_SEGMENTATION = True
+RUN_EVAL_NO_REFERENCE = True
 
-    return list(case_names)
-
-
-def get_first_case(case_names):
-    case_names = normalize_case_names(case_names)
-
-    if not case_names:
-        return None
-
-    return case_names[0]
-
-
-def build_denoised_case_names(base_case_names):
-    out = []
-
-    for case_name in normalize_case_names(base_case_names):
-        for method in DENOISING_METHODS:
-            out.append(f"{case_name}_denoised_{method}")
-
-    return out
-
-
-def print_case_group(title, case_names):
-    print("============================================================")
-    print(title)
-
-    case_names = normalize_case_names(case_names)
-
-    if not case_names:
-        print("  [empty]")
-        return
-
-    for name in case_names:
-        print(f"  - {name}")
+VIS_CASE = None
 
 
 def main():
-    base_case_names = normalize_case_names(CASE_NAMES)
+    cases = list(CASE_NAMES)
+    source = INPUT_SOURCE
+    denoising_method = (
+        INPUT_DENOISING_METHOD if source == "denoised" else None
+    )
+    print(
+        f"[PIPELINE] cases={cases}, source={source}, "
+        f"denoising_method={denoising_method}"
+    )
 
-    if not base_case_names:
-        raise RuntimeError("CASE_NAMES is empty.")
-
-    # ------------------------------------------------------------
-    # 0. DATA LOADING
-    # ------------------------------------------------------------
-
-    if RUN_DATA_LOADING:
-        prepare_cases(case_names=base_case_names)
-
-    # ------------------------------------------------------------
-    # 1. DENOISING
-    # ------------------------------------------------------------
-
-    intensity_case_names = list(base_case_names)
+    if RUN_PREPARE_DATA:
+        from src.data_loading.prepare_dicom import prepare_cases
+        prepare_cases(cases)
 
     if RUN_DENOISING:
-        denoise_cases(case_names=base_case_names)
-        intensity_case_names = build_denoised_case_names(base_case_names)
+        from src.denoising.runner import denoise_cases
+        denoise_cases(cases, DENOISING_METHODS)
 
-    print_case_group(
-        "[INFO] Intensity/input cases for downstream steps:",
-        intensity_case_names,
-    )
-
-    # ------------------------------------------------------------
-    # 2. SUPERVISED SEGMENTATION
-    # ------------------------------------------------------------
-
-    supervised_segmentation_cases = []
-
-    if RUN_SEGMENTATION:
-        supervised_segmentation_cases = segment_cases(
-            case_names=intensity_case_names,
+    if RUN_SUPERVISED_SEGMENTATION:
+        from src.segmentation.runner import segment_cases
+        segment_cases(
+            cases,
+            source,
+            denoising_method,
+            SEGMENTATION_MODEL_NAME,
         )
 
-        if supervised_segmentation_cases is None:
-            supervised_segmentation_cases = []
-
-    print_case_group(
-        "[INFO] Supervised segmentation output cases:",
-        supervised_segmentation_cases,
-    )
-
-    # ------------------------------------------------------------
-    # 3. UNSUPERVISED SEGMENTATION - EXTERNAL PIPELINE
-    # ------------------------------------------------------------
-
+    unsupervised_runs = None
     if RUN_UNSUPERVISED_SEGMENTATION:
-        run_unsupervised_segmentation(case_names=intensity_case_names)
-
-    # ------------------------------------------------------------
-    # 4. IMPORT UNSUPERVISED OUTPUT DO FORMATU PROJEKTU
-    # ------------------------------------------------------------
-
-    unsupervised_segmentation_cases = []
-
-    if RUN_UNSUPERVISED_OUTPUT_LOADING:
-        imported_unsup = import_unsupervised_outputs(
-            case_names=intensity_case_names,
+        from src.unsupervised_segmentation.runner import run_unsupervised_segmentation
+        unsupervised_runs = run_unsupervised_segmentation(
+            cases, source, denoising_method
         )
 
-        if imported_unsup is None:
-            imported_unsup = []
-
-        unsupervised_segmentation_cases = [
-            item["output_case"]
-            for item in imported_unsup
-            if "output_case" in item
-        ]
-
-    print_case_group(
-        "[INFO] Unsupervised imported output cases:",
-        unsupervised_segmentation_cases,
-    )
-
-    # ------------------------------------------------------------
-    # 5. RECONSTRUCTION
-    # ------------------------------------------------------------
-
-    intensity_reconstruction_cases = []
+    if RUN_IMPORT_UNSUPERVISED:
+        from src.data_loading.unsupervised_output_loader import import_unsupervised_outputs
+        import_unsupervised_outputs(
+            cases,
+            source,
+            denoising_method,
+            unsupervised_runs,
+            UNSUPERVISED_IMPORT_MODEL_NAME,
+        )
 
     if RUN_RECONSTRUCT_INTENSITY:
-        intensity_reconstruction_cases = list(intensity_case_names)
+        from src.reconstruction.runner import reconstruct_intensity_cases
+        reconstruct_intensity_cases(
+            cases,
+            source,
+            denoising_method,
+            RECONSTRUCTION_METHODS,
+        )
 
-    supervised_label_reconstruction_cases = []
-
-    if (
-        RUN_SEGMENTATION
-        and RECONSTRUCT_SEGMENTATION_OUTPUT
-        and supervised_segmentation_cases
-    ):
-        supervised_label_reconstruction_cases = list(supervised_segmentation_cases)
-
-    unsupervised_label_reconstruction_cases = list(unsupervised_segmentation_cases)
-
-    label_reconstruction_cases = (
-        supervised_label_reconstruction_cases
-        + unsupervised_label_reconstruction_cases
-    )
-
-    print_case_group(
-        "[INFO] Intensity reconstruction cases:",
-        intensity_reconstruction_cases,
-    )
-    print_case_group(
-        "[INFO] Supervised label reconstruction cases:",
-        supervised_label_reconstruction_cases,
-    )
-    print_case_group(
-        "[INFO] Unsupervised label reconstruction cases:",
-        unsupervised_label_reconstruction_cases,
-    )
-
-    if RUN_RECONSTRUCTION:
-        if intensity_reconstruction_cases:
-            reconstruct_cases(case_names=intensity_reconstruction_cases)
-
-        if label_reconstruction_cases:
-            reconstruct_cases(case_names=label_reconstruction_cases)
-
-        if not intensity_reconstruction_cases and not label_reconstruction_cases:
-            print("[WARN] RUN_RECONSTRUCTION=True, but no reconstruction cases found.")
-
-    # ------------------------------------------------------------
-    # 6. ISOSURFACE EXTRACTION
-    # ------------------------------------------------------------
+    if RUN_RECONSTRUCT_SEGMENTATION:
+        from src.reconstruction.runner import reconstruct_segmentation_cases
+        for model_name in SEGMENTATION_RESULT_MODELS:
+            reconstruct_segmentation_cases(
+                cases,
+                source,
+                denoising_method,
+                model_name,
+                RECONSTRUCTION_METHODS[0],
+            )
 
     if RUN_ISOSURFACE_EXTRACTION:
-        if label_reconstruction_cases:
-            extract_surfaces_for_cases(case_names=label_reconstruction_cases)
-        else:
-            print("[WARN] RUN_ISOSURFACE_EXTRACTION=True, but no label cases found.")
-
-    # ------------------------------------------------------------
-    # 7. EVALUATION
-    # ------------------------------------------------------------
+        from src.isosurface_extraction.extract import extract_surfaces_for_cases
+        for model_name in SEGMENTATION_RESULT_MODELS:
+            extract_surfaces_for_cases(
+                cases,
+                source,
+                denoising_method,
+                model_name,
+                RECONSTRUCTION_METHODS[0],
+            )
 
     if RUN_EVALUATION:
         if RUN_EVAL_RECONSTRUCTION_WITH_GT:
-            if intensity_reconstruction_cases:
-                evaluate_reconstruction_cases_with_gt(
-                    case_names=intensity_reconstruction_cases,
-                )
-            else:
-                print(
-                    "[INFO] Skipping reconstruction-with-GT evaluation: "
-                    "no intensity reconstruction cases."
-                )
+            from src.evaluation.reconstruction_with_gt import (
+                evaluate_reconstruction_cases_with_gt,
+            )
+            evaluate_reconstruction_cases_with_gt(
+                cases, source, denoising_method, RECONSTRUCTION_METHODS
+            )
 
         if RUN_EVAL_SEGMENTATION:
-            if supervised_label_reconstruction_cases:
+            from src.evaluation.segmentation_metrics import evaluate_segmentation_cases
+            for model_name in SEGMENTATION_RESULT_MODELS:
                 evaluate_segmentation_cases(
-                    case_names=supervised_label_reconstruction_cases,
-                )
-            else:
-                print(
-                    "[INFO] Skipping segmentation metrics: "
-                    "no supervised segmentation cases."
+                    cases,
+                    source,
+                    denoising_method,
+                    model_name,
+                    RECONSTRUCTION_METHODS[0],
                 )
 
         if RUN_EVAL_NO_REFERENCE:
-            no_reference_cases = (
-                intensity_reconstruction_cases
-                + supervised_label_reconstruction_cases
-                + unsupervised_label_reconstruction_cases
+            from src.evaluation.no_reference import evaluate_no_reference_cases
+            evaluate_no_reference_cases(
+                cases, source, denoising_method, RECONSTRUCTION_METHODS
             )
 
-            if no_reference_cases:
-                evaluate_no_reference_cases(
-                    case_names=no_reference_cases,
-                )
-            else:
-                print("[WARN] No cases for no-reference evaluation.")
-
-    # ------------------------------------------------------------
-    # 8. VISUALIZATION
-    # ------------------------------------------------------------
-
-    case_for_vis = VIS_CASE
-
-    if case_for_vis is None:
-        if unsupervised_label_reconstruction_cases:
-            case_for_vis = unsupervised_label_reconstruction_cases[0]
-        elif supervised_label_reconstruction_cases:
-            case_for_vis = supervised_label_reconstruction_cases[0]
-        elif intensity_reconstruction_cases:
-            case_for_vis = intensity_reconstruction_cases[0]
-        else:
-            case_for_vis = get_first_case(base_case_names)
-
+    case_for_vis = VIS_CASE or cases[0]
+    model_for_vis = SEGMENTATION_RESULT_MODELS[0]
     if RUN_NAPARI_VIS:
-        visualize_case_napari(case_name=case_for_vis)
-
+        from src.visualization.napari_viewer import visualize_case_napari
+        visualize_case_napari(
+            case_for_vis,
+            source,
+            denoising_method,
+            model_for_vis,
+            RECONSTRUCTION_METHODS,
+            RECONSTRUCTION_METHODS[0],
+        )
     if RUN_SIMPLE_VIS:
-        visualize_case_simple(case_name=case_for_vis)
+        from src.visualization.simple_viewer import visualize_case_simple
+        visualize_case_simple(
+            case_for_vis,
+            source,
+            denoising_method,
+            model_for_vis,
+            RECONSTRUCTION_METHODS[0],
+            RECONSTRUCTION_METHODS[0],
+        )
 
 
 if __name__ == "__main__":
