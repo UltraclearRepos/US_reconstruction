@@ -2,24 +2,16 @@ import numpy as np
 import torch
 
 from config import (
+    SEGMENTATION_CHECKPOINT,
     SEGMENTATION_DEVICE,
     SEGMENTATION_IMAGE_KEY,
-    SEGMENTATION_MODEL_FILE,
-    SEGMENTATION_MODEL_META_FILE,
     SEGMENTATION_MODEL_NAME,
-    SEGMENTATION_MODELS_DIR,
-    SEGMENTATION_NORMALIZATION,
 )
 from src.data_loading.sweep import load_sweep_h5, save_sweep_h5
-from src.segmentation.common import (
-    get_model_input_size,
-    load_model_meta,
-    normalize_frame_for_unet,
-    resize_frame_float,
-    resize_mask_nearest,
-)
-from src.utils.paths import segmentation_path, source_sweep_path
+from src.segmentation.checkpoint import load_checkpoint
+from src.segmentation.common import prepare_frame, resize_mask
 from src.utils.logging import log_io
+from src.utils.paths import segmentation_path, source_sweep_path
 
 
 def normalize_list(values):
@@ -30,32 +22,45 @@ def normalize_list(values):
     return list(values)
 
 
-def load_segmentation_model(model_name):
-    model_dir = SEGMENTATION_MODELS_DIR / model_name
-    model_path = model_dir / SEGMENTATION_MODEL_FILE
-    meta_path = model_dir / SEGMENTATION_MODEL_META_FILE
+def load_segmentation_model():
     device = torch.device(
         SEGMENTATION_DEVICE
         or ("cuda" if torch.cuda.is_available() else "cpu")
     )
-    print(f"[SEGMENT] loading {model_path} on {device}")
-    model = torch.jit.load(str(model_path), map_location=device)
-    model.eval()
-    return model, load_model_meta(meta_path), device, model_path
+    print(f"[SEGMENT] loading {SEGMENTATION_CHECKPOINT} on {device}")
+    model, settings = load_checkpoint(SEGMENTATION_CHECKPOINT, device)
+    print(
+        f"[SEGMENT] image_size={settings['image_size']}, "
+        f"in_channels={settings['in_channels']}, "
+        f"classes={settings['n_classes']}, "
+        f"task={settings['task_name']}"
+    )
+    return model, settings, device
 
 
-@torch.no_grad()
-def predict_masks_for_sequence(frames, model, model_input_size, device):
+@torch.inference_mode()
+def predict_masks_for_sequence(frames, model, settings, device):
     count, height, width = frames.shape
     masks = np.zeros((count, height, width), dtype=np.uint16)
+
     for index, frame in enumerate(frames):
-        normalized = normalize_frame_for_unet(frame, SEGMENTATION_NORMALIZATION)
-        resized = resize_frame_float(normalized, model_input_size)
-        tensor = torch.from_numpy(resized[None, None]).to(device, torch.float32)
-        prediction = torch.argmax(model(tensor), dim=1).squeeze().cpu().numpy()
-        masks[index] = resize_mask_nearest(prediction, (height, width))
-        if (index + 1) % 50 == 0 or index + 1 == count:
-            print(f"[SEGMENT] frames {index + 1}/{count}")
+        prepared = prepare_frame(frame, settings["image_size"])
+        tensor = torch.from_numpy(prepared[None, None]).to(device, torch.float32)
+        tensor = tensor.repeat(1, settings["in_channels"], 1, 1)
+
+        outputs = model(tensor)
+        task_name = settings["task_name"]
+        if task_name not in outputs:
+            raise KeyError(
+                f"Model has no '{task_name}' output; available: {sorted(outputs)}"
+            )
+        prediction = outputs[task_name].argmax(dim=1)[0].cpu().numpy()
+        masks[index] = resize_mask(prediction, (height, width))
+
+        processed = index + 1
+        if processed % 50 == 0 or processed == count:
+            print(f"[SEGMENT] frames {processed}/{count}")
+
     return masks
 
 
@@ -69,14 +74,15 @@ def segment_case(
     source_h5 = source_sweep_path(case_name, source, denoising_method)
     output_h5 = segmentation_path(case_name, source, denoising_method, model_name)
     log_io("SUPERVISED SEGMENTATION", {"sweep": source_h5}, {"labels": output_h5})
-    model, meta, device, model_path = loaded_model or load_segmentation_model(model_name)
+
+    model, settings, device = loaded_model or load_segmentation_model()
     frames, poses, spacing_xy, _ = load_sweep_h5(
-        source_h5, image_key=SEGMENTATION_IMAGE_KEY
+        source_h5,
+        image_key=SEGMENTATION_IMAGE_KEY,
     )
-    masks = predict_masks_for_sequence(
-        frames, model, get_model_input_size(meta), device
-    )
+    masks = predict_masks_for_sequence(frames, model, settings, device)
     classes = np.unique(masks).astype(int)
+
     save_sweep_h5(
         output_h5,
         masks,
@@ -87,9 +93,11 @@ def segment_case(
         attrs={
             "content_type": "segmentation_labels",
             "model_name": model_name,
-            "model_path": str(model_path),
-            "source_h5": str(source_h5),
+            "checkpoint": str(SEGMENTATION_CHECKPOINT),
+            "task": settings["task_name"],
+            "model_input_size": settings["image_size"],
             "classes": classes,
+            "source_h5": str(source_h5),
         },
     )
     print(f"[SEGMENT] {source_h5} -> {output_h5}; classes={classes.tolist()}")
@@ -102,7 +110,7 @@ def segment_cases(
     denoising_method=None,
     model_name=SEGMENTATION_MODEL_NAME,
 ):
-    loaded_model = load_segmentation_model(model_name)
+    loaded_model = load_segmentation_model()
     return [
         segment_case(
             case_name,

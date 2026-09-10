@@ -47,12 +47,10 @@ TV_MAX_NUM_ITER = 200
 
 
 # Supervised segmentation
-SEGMENTATION_MODEL_NAME = "rdpad"
-SEGMENTATION_MODEL_FILE = "best_model_traced.pt"
-SEGMENTATION_MODEL_META_FILE = "best_model_export_meta.json"
+SEGMENTATION_MODEL_NAME = "tg3k_unet"
+SEGMENTATION_CHECKPOINT = SEGMENTATION_MODELS_DIR / "best-epoch=052.ckpt"
 SEGMENTATION_IMAGE_KEY = None
 SEGMENTATION_DEVICE = None
-SEGMENTATION_NORMALIZATION = "auto"
 
 # Unsupervised segmentation
 UNSUPERVISED_REPO_URL = "https://github.com/alexaatm/UnsupervisedSegmentor4Ultrasound.git"

@@ -245,23 +245,20 @@ Klasyczne filtry obrazu:
 
 ### `segmentation/runner.py`
 
-Cel: supervised segmentacja klatek 2D modelem TorchScript.
+Cel: supervised segmentacja klatek 2D modelem wczytanym z checkpointu
+PyTorch Lightning.
 
 Wejscie:
 
 ```text
-data/for_reconstruction/<case>/*.h5
-models/segmentation/<model_name>/best_model_traced.pt
-models/segmentation/<model_name>/best_model_export_meta.json
+data/prepared/<case>/sweep.h5
+models/segmentation/*.ckpt
 ```
 
 Wyjscie:
 
 ```text
-data/segmentations/<case>/<model>/<base>_labels.npz
-data/segmentations/<case>/<model>/classes/<base>_classX_masks.npz
-data/segmentations/<case>/<model>/<base>_segmentation_summary.json
-data/for_reconstruction/<case>_seg_<model>/<base>_classX.h5
+data/segmented/<case>/<source>/<model>/labels.h5
 ```
 
 Najwazniejsze funkcje:
@@ -269,14 +266,14 @@ Najwazniejsze funkcje:
 | Funkcja | Co robi |
 | --- | --- |
 | `segment_cases()` | Odpala segmentacje dla listy case'ow. |
-| `load_segmentation_model()` | Laduje TorchScript model i meta JSON. |
-| `predict_masks_for_sequence()` | Dla kazdej klatki 2D przewiduje maske klas. |
-| `save_segmentation_outputs()` | Zapisuje etykiety, maski klas i H5 do rekonstrukcji. |
+| `load_segmentation_model()` | Laduje architekture i wagi z checkpointu Lightning. |
+| `predict_masks_for_sequence()` | Przewiduje maske osobno dla kazdej klatki 2D. |
+| `segment_case()` | Zachowuje pozy i spacing oraz zapisuje `labels.h5`. |
 
 Relacje:
 
 ```text
-data/for_reconstruction/<case> -> segmentation -> data/for_reconstruction/<case>_seg_<model>
+data/prepared/<case>/sweep.h5 -> segmentation -> data/segmented/<case>/<source>/<model>/labels.h5
 ```
 
 ### `segmentation/common.py`
@@ -285,16 +282,15 @@ Pomocnicze funkcje dla modelu segmentacji:
 
 | Rola | Co robi |
 | --- | --- |
-| normalizacja | Przygotowuje klatke do modelu U-Net. |
-| resize obrazu | Dopasowuje obraz do rozmiaru wejscia modelu. |
+| normalizacja | Skaluje intensywnosc tak samo jak podczas treningu. |
+| resize obrazu | Dopasowuje obraz do `image_size` z checkpointu. |
 | resize maski | Przywraca maske do oryginalnego rozmiaru klatki. |
-| H5 IO | Laduje i zapisuje H5 zgodny z pipeline'em. |
 
-### `segmentation/train_unet.py`
+### `segmentation/model.py` i `segmentation/checkpoint.py`
 
-Skrypt treningowy modelu U-Net.
-
-Nie jest czescia glownego `main.py`. To raczej osobny etap do trenowania modelu, ktory pozniej jest eksportowany jako TorchScript i uzywany przez `segmentation/runner.py`.
+`model.py` zawiera architekture U-Net zgodna z projektem treningowym.
+`checkpoint.py` odczytuje wagi oraz pelny config zapisany przez
+`save_hyperparameters()`. Brak wymaganych metadanych konczy etap bledem.
 
 ## `unsupervised_segmentation/`
 
@@ -679,4 +675,3 @@ for_reconstruction/<case>/*.h5
   -> reconstruction/runner.py
   -> reconstructed/<case>_unsup_.../<method>/*.npz
 ```
-
