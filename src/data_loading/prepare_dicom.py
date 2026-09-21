@@ -78,9 +78,10 @@ def ensure_zyx(arr):
 
 def extract_spacing_xy(ds):
     sx, sy = 1.0, 1.0
-    if hasattr(ds, "PixelSpacing"):
+    pixel_measures = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0] if hasattr(ds, "SharedFunctionalGroupsSequence") else ds
+    if hasattr(pixel_measures, "PixelSpacing"):
         try:
-            ps = [float(x) for x in ds.PixelSpacing]
+            ps = [float(x) for x in pixel_measures.PixelSpacing]
             if len(ps) >= 2:
                 sy, sx = ps[0], ps[1]
                 return float(sx), float(sy)
@@ -102,10 +103,11 @@ def extract_spacing_xy(ds):
 
 def extract_spacing_zyx(ds):
     sx, sy = extract_spacing_xy(ds)
+    pixel_measures = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0] if hasattr(ds, "SharedFunctionalGroupsSequence") else ds
     sz = 1.0
-    if hasattr(ds, "SliceThickness"):
+    if hasattr(pixel_measures, "SliceThickness"):
         try:
-            sz = float(ds.SliceThickness)
+            sz = float(pixel_measures.SliceThickness)
         except Exception:
             pass
     return float(sz), float(sy), float(sx)
