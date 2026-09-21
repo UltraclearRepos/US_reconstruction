@@ -49,7 +49,7 @@ RUN_PREPARE_DATA = True
 RUN_SUPERVISED_SEGMENTATION = True
 RUN_RECONSTRUCT_INTENSITY = True
 RUN_RECONSTRUCT_SEGMENTATION = True
-RUN_ISOSURFACE_EXTRACTION = True
+RUN_EXTRACT_SEGMENTATION_SURFACES = True
 ```
 
 Stages do not have to run in one invocation. Reconstruction can read an
@@ -70,6 +70,9 @@ Each run gets a timestamped directory and does not delete an earlier run.
 Multiclass segmentation uses `voxel_nearest` reconstruction. Averaging methods
 are reserved for intensity because averaging class IDs would create invalid
 labels.
+
+Surface extraction accepts only reconstructed segmentation labels. Intensity
+volumes are not an input to this stage.
 
 Run:
 

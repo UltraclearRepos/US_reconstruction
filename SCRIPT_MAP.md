@@ -74,8 +74,8 @@ multiclass segmentation is restricted to `voxel_nearest`.
 
 ### `src/isosurface_extraction/`
 
-`extract.py` extracts per-class surfaces from ground-truth and reconstructed
-label volumes.
+`extract.py` extracts per-class surfaces exclusively from ground-truth and
+reconstructed segmentation labels. Intensity reconstructions are not accepted.
 
 ### `src/evaluation/`
 

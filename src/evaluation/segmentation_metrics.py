@@ -20,6 +20,7 @@ from config import (
     EVAL_SURFACE_DICE_TOLERANCE_MM,
     EVAL_HIST_BINS,
     EVAL_EPS,
+    SEGMENTATION_RECONSTRUCTION_METHOD,
 )
 from src.utils.paths import (
     ground_truth_labels_path,
@@ -545,7 +546,7 @@ def evaluate_segmentation_case(
 def evaluate_segmentation_cases(
     case_names,
     model_name=None,
-    reconstruction_method="voxel_nearest",
+    reconstruction_method=SEGMENTATION_RECONSTRUCTION_METHOD,
 ):
     case_names = normalize_case_names(case_names)
 

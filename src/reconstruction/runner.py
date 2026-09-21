@@ -17,7 +17,8 @@ from config import (
     IMAGE_KEY,
     N_NEAREST,
     PIXEL_SPACING,
-    RECONSTRUCTION_METHODS,
+    INTENSITY_RECONSTRUCTION_METHODS,
+    SEGMENTATION_RECONSTRUCTION_METHOD,
     SPLINE_ORDER,
     VNN_MEAN_N_NEAREST,
     VOXEL_SIZE,
@@ -95,7 +96,7 @@ def reconstruct_intensity_case(
 ):
     input_h5 = prepared_sweep_path(case_name)
     outputs = []
-    for method in normalize_list(methods or RECONSTRUCTION_METHODS):
+    for method in normalize_list(methods or INTENSITY_RECONSTRUCTION_METHODS):
         out_dir = intensity_reconstruction_dir(case_name, method)
         out_dir.mkdir(parents=True, exist_ok=True)
         log_io(
@@ -118,7 +119,7 @@ def reconstruct_intensity_case(
 def reconstruct_segmentation_case(
     case_name,
     model_name=None,
-    method="voxel_nearest",
+    method=SEGMENTATION_RECONSTRUCTION_METHOD,
 ):
     if method != "voxel_nearest":
         raise ValueError("Multiclass labels must use method='voxel_nearest'")
@@ -180,7 +181,7 @@ def reconstruct_intensity_cases(case_names, methods=None):
 def reconstruct_segmentation_cases(
     case_names,
     model_name,
-    method="voxel_nearest",
+    method=SEGMENTATION_RECONSTRUCTION_METHOD,
 ):
     return [
         reconstruct_segmentation_case(

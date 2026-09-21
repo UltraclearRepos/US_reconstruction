@@ -4,7 +4,13 @@ import json
 import numpy as np
 from skimage.measure import marching_cubes
 
-from config import ISO_CLASSES, ISO_MIN_VOXELS, ISO_SAVE_OBJ, ISO_STEP_SIZE
+from config import (
+    ISO_CLASSES,
+    ISO_MIN_VOXELS,
+    ISO_SAVE_OBJ,
+    ISO_STEP_SIZE,
+    SEGMENTATION_RECONSTRUCTION_METHOD,
+)
 from src.utils.paths import (
     ground_truth_labels_path,
     ground_truth_surface_dir,
@@ -78,10 +84,10 @@ def extract_surfaces_from_labels(labels_path, output_dir, classes=None):
     return summary
 
 
-def extract_surfaces_for_case(
+def extract_segmentation_surfaces_for_case(
     case_name,
     model_name=None,
-    reconstruction_method="voxel_nearest",
+    reconstruction_method=SEGMENTATION_RECONSTRUCTION_METHOD,
 ):
     outputs = {}
     gt_path = ground_truth_labels_path(case_name)
@@ -110,13 +116,13 @@ def extract_surfaces_for_case(
     return outputs
 
 
-def extract_surfaces_for_cases(
+def extract_segmentation_surfaces_for_cases(
     case_names,
     model_name=None,
-    reconstruction_method="voxel_nearest",
+    reconstruction_method=SEGMENTATION_RECONSTRUCTION_METHOD,
 ):
     return {
-        case_name: extract_surfaces_for_case(
+        case_name: extract_segmentation_surfaces_for_case(
             case_name,
             model_name,
             reconstruction_method,

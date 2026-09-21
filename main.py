@@ -5,7 +5,8 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
 from config import (
-    RECONSTRUCTION_METHODS,
+    INTENSITY_RECONSTRUCTION_METHODS,
+    SEGMENTATION_RECONSTRUCTION_METHOD,
     SEGMENTATION_MODEL_NAME,
     UNSUPERVISED_IMPORT_MODEL_NAME,
 )
@@ -25,7 +26,7 @@ RUN_UNSUPERVISED_SEGMENTATION = False
 RUN_IMPORT_UNSUPERVISED = False
 RUN_RECONSTRUCT_INTENSITY = False
 RUN_RECONSTRUCT_SEGMENTATION = False
-RUN_ISOSURFACE_EXTRACTION = False
+RUN_EXTRACT_SEGMENTATION_SURFACES = False
 RUN_EVALUATION = False
 RUN_NAPARI_VIS = True
 RUN_SIMPLE_VIS = False
@@ -69,7 +70,7 @@ def main():
         from src.reconstruction.runner import reconstruct_intensity_cases
         reconstruct_intensity_cases(
             cases,
-            methods=RECONSTRUCTION_METHODS,
+            methods=INTENSITY_RECONSTRUCTION_METHODS,
         )
 
     if RUN_RECONSTRUCT_SEGMENTATION:
@@ -78,16 +79,18 @@ def main():
             reconstruct_segmentation_cases(
                 cases,
                 model_name,
-                RECONSTRUCTION_METHODS[0],
+                SEGMENTATION_RECONSTRUCTION_METHOD,
             )
 
-    if RUN_ISOSURFACE_EXTRACTION:
-        from src.isosurface_extraction.extract import extract_surfaces_for_cases
+    if RUN_EXTRACT_SEGMENTATION_SURFACES:
+        from src.isosurface_extraction.extract import (
+            extract_segmentation_surfaces_for_cases,
+        )
         for model_name in SEGMENTATION_RESULT_MODELS:
-            extract_surfaces_for_cases(
+            extract_segmentation_surfaces_for_cases(
                 cases,
                 model_name,
-                RECONSTRUCTION_METHODS[0],
+                SEGMENTATION_RECONSTRUCTION_METHOD,
             )
 
     if RUN_EVALUATION:
@@ -96,7 +99,7 @@ def main():
                 evaluate_reconstruction_cases_with_gt,
             )
             evaluate_reconstruction_cases_with_gt(
-                cases, methods=RECONSTRUCTION_METHODS
+                cases, methods=INTENSITY_RECONSTRUCTION_METHODS
             )
 
         if RUN_EVAL_SEGMENTATION:
@@ -105,13 +108,13 @@ def main():
                 evaluate_segmentation_cases(
                     cases,
                     model_name,
-                    RECONSTRUCTION_METHODS[0],
+                    SEGMENTATION_RECONSTRUCTION_METHOD,
                 )
 
         if RUN_EVAL_NO_REFERENCE:
             from src.evaluation.no_reference import evaluate_no_reference_cases
             evaluate_no_reference_cases(
-                cases, methods=RECONSTRUCTION_METHODS
+                cases, methods=INTENSITY_RECONSTRUCTION_METHODS
             )
 
     case_for_vis = VIS_CASE or cases[0]
@@ -121,16 +124,16 @@ def main():
         visualize_case_napari(
             case_for_vis,
             model_for_vis,
-            RECONSTRUCTION_METHODS,
-            RECONSTRUCTION_METHODS[0],
+            INTENSITY_RECONSTRUCTION_METHODS,
+            SEGMENTATION_RECONSTRUCTION_METHOD,
         )
     if RUN_SIMPLE_VIS:
         from src.visualization.simple_viewer import visualize_case_simple
         visualize_case_simple(
             case_for_vis,
             model_for_vis,
-            RECONSTRUCTION_METHODS[0],
-            RECONSTRUCTION_METHODS[0],
+            INTENSITY_RECONSTRUCTION_METHODS[0],
+            SEGMENTATION_RECONSTRUCTION_METHOD,
         )
 
 

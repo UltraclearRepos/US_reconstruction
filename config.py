@@ -83,10 +83,11 @@ UNSUPERVISED_IMPORT_OVERWRITE = True
 
 
 # Reconstruction
-# Used by both intensity and segmentation reconstruction.
-# Multiclass segmentation requires ["voxel_nearest"] because averaging methods
-# would produce invalid class IDs.
-RECONSTRUCTION_METHODS = ["voxel_nearest"]
+INTENSITY_RECONSTRUCTION_METHODS = ["voxel_nearest"]
+
+# Multiclass segmentation must use nearest-neighbour reconstruction because
+# averaging methods would produce invalid class IDs.
+SEGMENTATION_RECONSTRUCTION_METHOD = "voxel_nearest"
 VOXEL_SIZE = (0.2, 0.2, 0.2)
 PIXEL_SPACING = None
 BACKGROUND_THRESHOLD = 0.0
