@@ -4,13 +4,11 @@ h5py
 pydicom
 torch
 torchvision
-vtk
 napari
 pyqt5
 scikit-image
 scikit-learn
 matplotlib
-pyvista
 hydra-core
 omegaconf
 wandb

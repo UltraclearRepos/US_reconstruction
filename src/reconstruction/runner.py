@@ -25,7 +25,7 @@ from config import (
 )
 from src.data_loading.sweep import load_sweep_h5
 from src.reconstruction.bspline import reconstruct_bspline_for_file
-from src.reconstruction.common import save_as_vti, save_reconstruction_npz
+from src.reconstruction.common import save_reconstruction_npz
 from src.reconstruction.vnn import (
     reconstruct_voxel_nearest_for_file,
     voxel_nearest_reconstruct_torch,
@@ -106,12 +106,8 @@ def reconstruct_intensity_case(
         )
         reconstruct_file_with_method(input_h5, out_dir, method)
         generated_npz = out_dir / f"{input_h5.stem}.npz"
-        generated_vti = out_dir / f"{input_h5.stem}.vti"
         output_npz = out_dir / "volume.npz"
-        output_vti = out_dir / "volume.vti"
         generated_npz.replace(output_npz)
-        if generated_vti.exists():
-            generated_vti.replace(output_vti)
         outputs.append(output_npz)
     return outputs
 
@@ -164,7 +160,6 @@ def reconstruct_segmentation_case(
             "classes": np.unique(volume),
         },
     )
-    save_as_vti(out_dir / "labels.vti", volume, voxel, origin, array_name="labels")
     return output_npz
 
 

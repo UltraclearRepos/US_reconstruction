@@ -317,7 +317,6 @@ def reconstruct_bspline_for_file(
 
     Output:
       .npz
-      .vti
     """
     path = Path(path)
     base = path.stem
@@ -361,7 +360,6 @@ def reconstruct_bspline_for_file(
         voxel=voxel,
         origin=origin,
         method="bspline",
-        is_mask=is_mask,
         extra={
             "n_nearest": np.int32(n_nearest),
             "spline_order": np.int32(spline_order),

@@ -241,7 +241,6 @@ def reconstruct_distance_weighted_for_file(
         voxel=voxel,
         origin=origin,
         method="distance_weighted",
-        is_mask=is_mask,
         extra={
             "n_nearest": np.int32(n_nearest),
             "distance_power": np.float32(distance_power),

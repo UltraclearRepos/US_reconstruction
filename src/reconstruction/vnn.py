@@ -172,6 +172,5 @@ def reconstruct_voxel_nearest_for_file(
         voxel=voxel,
         origin=origin,
         method="voxel_nearest",
-        is_mask=is_mask,
         extra={},
     )

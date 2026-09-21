@@ -3,13 +3,6 @@ from pathlib import Path
 import numpy as np
 import torch
 
-try:
-    import vtk
-    from vtk.util import numpy_support as vtk_np
-    VTK_AVAILABLE = True
-except Exception:
-    VTK_AVAILABLE = False
-
 from src.data_loading.sweep import load_sweep_h5
 
 
@@ -124,38 +117,6 @@ def make_world_points_block_flat(origin, voxel, Dx, Dy, Dz, start, end):
     return np.stack([xs, ys, zs], axis=1).astype(np.float32)
 
 
-def save_as_vti(path_vti, vol_zyx, spacing_xyz, origin_xyz, array_name="intensity"):
-    if not VTK_AVAILABLE:
-        print("[WARN] vtk niedostępny — pomijam zapis .vti")
-        return
-
-    path_vti = Path(path_vti)
-    path_vti.parent.mkdir(parents=True, exist_ok=True)
-
-    Dz, Dy, Dx = vol_zyx.shape
-
-    img = vtk.vtkImageData()
-    img.SetDimensions(Dx, Dy, Dz)
-    img.SetSpacing(*map(float, spacing_xyz))
-    img.SetOrigin(*map(float, origin_xyz))
-
-    flat = np.ascontiguousarray(vol_zyx.transpose(2, 1, 0)).ravel(order="F")
-
-    vtk_arr = vtk_np.numpy_to_vtk(
-        num_array=flat,
-        deep=True,
-        array_type=vtk.VTK_FLOAT,
-    )
-    vtk_arr.SetName(array_name)
-
-    img.GetPointData().SetScalars(vtk_arr)
-
-    writer = vtk.vtkXMLImageDataWriter()
-    writer.SetFileName(str(path_vti))
-    writer.SetInputData(img)
-    writer.Write()
-
-
 def save_reconstruction_npz(
     path_npz,
     volume,
@@ -192,24 +153,12 @@ def finalize_and_save(
     voxel,
     origin,
     method,
-    is_mask=False,
     extra=None,
 ):
     out_root = Path(out_root)
     out_root.mkdir(parents=True, exist_ok=True)
 
-    array_name = "mask" if is_mask else "intensity"
-
-    vti_path = out_root / f"{base}.vti"
     npz_path = out_root / f"{base}.npz"
-
-    save_as_vti(
-        path_vti=vti_path,
-        vol_zyx=volume,
-        spacing_xyz=voxel,
-        origin_xyz=origin,
-        array_name=array_name,
-    )
 
     save_reconstruction_npz(
         path_npz=npz_path,
@@ -221,7 +170,7 @@ def finalize_and_save(
         extra=extra,
     )
 
-    print(f"[OK] {base} [{method}] -> {vti_path.name} / {npz_path.name}")
+    print(f"[OK] {base} [{method}] -> {npz_path.name}")
 
 
 def nearest_sample_numpy(img, frame_idx, u, v):
