@@ -33,9 +33,9 @@ from src.reconstruction.vnn_distance_weighted import reconstruct_distance_weight
 from src.reconstruction.vnn_mean import reconstruct_voxel_nearest_mean_for_file
 from src.utils.paths import (
     intensity_reconstruction_dir,
+    prepared_sweep_path,
     segmentation_path,
     segmentation_reconstruction_dir,
-    source_sweep_path,
 )
 from src.utils.logging import log_io
 
@@ -91,16 +91,12 @@ def reconstruct_file_with_method(path, out_dir, method):
 
 def reconstruct_intensity_case(
     case_name,
-    source="prepared",
-    denoising_method=None,
     methods=None,
 ):
-    input_h5 = source_sweep_path(case_name, source, denoising_method)
+    input_h5 = prepared_sweep_path(case_name)
     outputs = []
     for method in normalize_list(methods or RECONSTRUCTION_METHODS):
-        out_dir = intensity_reconstruction_dir(
-            case_name, source, denoising_method, method
-        )
+        out_dir = intensity_reconstruction_dir(case_name, method)
         out_dir.mkdir(parents=True, exist_ok=True)
         log_io(
             f"RECONSTRUCTION intensity/{method}",
@@ -121,18 +117,14 @@ def reconstruct_intensity_case(
 
 def reconstruct_segmentation_case(
     case_name,
-    source="prepared",
-    denoising_method=None,
     model_name=None,
     method="voxel_nearest",
 ):
     if method != "voxel_nearest":
         raise ValueError("Multiclass labels must use method='voxel_nearest'")
 
-    input_h5 = segmentation_path(case_name, source, denoising_method, model_name)
-    out_dir = segmentation_reconstruction_dir(
-        case_name, source, denoising_method, model_name, method
-    )
+    input_h5 = segmentation_path(case_name, model_name)
+    out_dir = segmentation_reconstruction_dir(case_name, model_name, method)
     out_dir.mkdir(parents=True, exist_ok=True)
     labels, poses, (sx, sy), _ = load_sweep_h5(input_h5, image_key="labels")
     if PIXEL_SPACING is not None:
@@ -175,26 +167,24 @@ def reconstruct_segmentation_case(
     return output_npz
 
 
-def reconstruct_intensity_cases(case_names, source, denoising_method=None, methods=None):
+def reconstruct_intensity_cases(case_names, methods=None):
     return [
         output
         for case_name in normalize_list(case_names)
         for output in reconstruct_intensity_case(
-            case_name, source, denoising_method, methods
+            case_name, methods
         )
     ]
 
 
 def reconstruct_segmentation_cases(
     case_names,
-    source,
-    denoising_method,
     model_name,
     method="voxel_nearest",
 ):
     return [
         reconstruct_segmentation_case(
-            case_name, source, denoising_method, model_name, method
+            case_name, model_name, method
         )
         for case_name in normalize_list(case_names)
     ]

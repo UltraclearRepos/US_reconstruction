@@ -1,1 +1,0 @@
-"""Ultrasound denoising."""

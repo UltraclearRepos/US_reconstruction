@@ -14,7 +14,11 @@ from config import (
 )
 from src.data_loading.sweep import save_sweep_h5
 from src.utils.logging import log_io
-from src.utils.paths import ground_truth_labels_path, ground_truth_volume_path
+from src.utils.paths import (
+    ground_truth_labels_path,
+    ground_truth_volume_path,
+    prepared_sweep_path,
+)
 
 
 def log(msg):
@@ -161,7 +165,7 @@ def prepare_case(case_dir):
     ensure_dir(prepared_case_dir)
     ensure_dir(gt_case_dir)
 
-    out_h5 = prepared_case_dir / "sweep.h5"
+    out_h5 = prepared_sweep_path(case_name)
     out_volume_npz = ground_truth_volume_path(case_name)
     out_seg_labels_npz = ground_truth_labels_path(case_name)
     log_io(

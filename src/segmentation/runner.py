@@ -11,7 +11,7 @@ from src.data_loading.sweep import load_sweep_h5, save_sweep_h5
 from src.segmentation.checkpoint import load_checkpoint
 from src.segmentation.common import prepare_frame, resize_mask
 from src.utils.logging import log_io
-from src.utils.paths import segmentation_path, source_sweep_path
+from src.utils.paths import prepared_sweep_path, segmentation_path
 
 
 def normalize_list(values):
@@ -66,13 +66,11 @@ def predict_masks_for_sequence(frames, model, settings, device):
 
 def segment_case(
     case_name,
-    source="prepared",
-    denoising_method=None,
     model_name=SEGMENTATION_MODEL_NAME,
     loaded_model=None,
 ):
-    source_h5 = source_sweep_path(case_name, source, denoising_method)
-    output_h5 = segmentation_path(case_name, source, denoising_method, model_name)
+    source_h5 = prepared_sweep_path(case_name)
+    output_h5 = segmentation_path(case_name, model_name)
     log_io("SUPERVISED SEGMENTATION", {"sweep": source_h5}, {"labels": output_h5})
 
     model, settings, device = loaded_model or load_segmentation_model()
@@ -106,16 +104,12 @@ def segment_case(
 
 def segment_cases(
     case_names,
-    source="prepared",
-    denoising_method=None,
     model_name=SEGMENTATION_MODEL_NAME,
 ):
     loaded_model = load_segmentation_model()
     return [
         segment_case(
             case_name,
-            source,
-            denoising_method,
             model_name,
             loaded_model,
         )

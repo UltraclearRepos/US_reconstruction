@@ -12,8 +12,8 @@ from config import (
 )
 from src.data_loading.sweep import load_sweep_h5, save_sweep_h5
 from src.utils.paths import (
+    prepared_sweep_path,
     segmentation_path,
-    source_sweep_path,
     unsupervised_run_dir,
 )
 from src.utils.logging import log_io
@@ -52,8 +52,8 @@ def has_segmentation_outputs(path):
     )
 
 
-def find_latest_run(case_name, source, denoising_method):
-    root = unsupervised_run_dir(case_name, source, denoising_method)
+def find_latest_run(case_name):
+    root = unsupervised_run_dir(case_name)
     candidates = [path for path in root.rglob("*") if path.is_dir() and has_segmentation_outputs(path)]
     if has_segmentation_outputs(root):
         candidates.append(root)
@@ -138,24 +138,20 @@ def read_unsupervised_png_stack(seg_dir, source_shape):
 
 def import_one_unsupervised_output(
     case_name,
-    source="prepared",
-    denoising_method=None,
     run_dir=None,
     use_crf=UNSUPERVISED_IMPORT_USE_CRF,
     model_name=UNSUPERVISED_IMPORT_MODEL_NAME,
 ):
-    source_h5 = source_sweep_path(case_name, source, denoising_method)
+    source_h5 = prepared_sweep_path(case_name)
     frames, poses, spacing_xy, _ = load_sweep_h5(source_h5)
     run_dir = (
         resolve_run_dir(run_dir)
         if run_dir
-        else find_latest_run(case_name, source, denoising_method)
+        else find_latest_run(case_name)
     )
     png_dir = get_segmentation_png_dir(run_dir, use_crf)
     labels = read_unsupervised_png_stack(png_dir, frames.shape)
-    output_h5 = segmentation_path(
-        case_name, source, denoising_method, model_name
-    )
+    output_h5 = segmentation_path(case_name, model_name)
     log_io(
         "IMPORT UNSUPERVISED",
         {"segmentation PNGs": png_dir, "source sweep": source_h5},
@@ -183,8 +179,6 @@ def import_one_unsupervised_output(
 
 def import_unsupervised_outputs(
     case_names,
-    source="prepared",
-    denoising_method=None,
     run_dirs=None,
     model_name=UNSUPERVISED_IMPORT_MODEL_NAME,
 ):
@@ -195,8 +189,6 @@ def import_unsupervised_outputs(
         outputs.append(
             import_one_unsupervised_output(
                 case_name,
-                source,
-                denoising_method,
                 run_dir,
                 model_name=model_name,
             )

@@ -80,8 +80,6 @@ def extract_surfaces_from_labels(labels_path, output_dir, classes=None):
 
 def extract_surfaces_for_case(
     case_name,
-    source="prepared",
-    denoising_method=None,
     model_name=None,
     reconstruction_method="voxel_nearest",
 ):
@@ -96,8 +94,6 @@ def extract_surfaces_for_case(
 
     predicted_path = segmentation_reconstruction_path(
         case_name,
-        source,
-        denoising_method,
         model_name,
         reconstruction_method,
     )
@@ -106,8 +102,6 @@ def extract_surfaces_for_case(
             predicted_path,
             predicted_surface_dir(
                 case_name,
-                source,
-                denoising_method,
                 model_name,
                 reconstruction_method,
             ),
@@ -118,16 +112,12 @@ def extract_surfaces_for_case(
 
 def extract_surfaces_for_cases(
     case_names,
-    source="prepared",
-    denoising_method=None,
     model_name=None,
     reconstruction_method="voxel_nearest",
 ):
     return {
         case_name: extract_surfaces_for_case(
             case_name,
-            source,
-            denoising_method,
             model_name,
             reconstruction_method,
         )

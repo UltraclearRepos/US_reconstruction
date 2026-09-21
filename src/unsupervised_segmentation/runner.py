@@ -55,7 +55,7 @@ from config import (
 )
 
 from src.data_loading.h5_utils import list_h5_files, read_h5_meta, guess_keys
-from src.utils.paths import source_sweep_path, unsupervised_run_dir
+from src.utils.paths import prepared_sweep_path, unsupervised_run_dir
 from src.utils.logging import log_io
 
 
@@ -301,10 +301,8 @@ def write_list_file(path: Path, filenames):
 def prepare_dataset_from_h5(
     repo_dir: Path,
     case_name: str,
-    source="prepared",
-    denoising_method=None,
 ):
-    h5_path = source_sweep_path(case_name, source, denoising_method)
+    h5_path = prepared_sweep_path(case_name)
 
     dataset_dir = get_external_dataset_dir(repo_dir)
     images_dir = dataset_dir / "images"
@@ -777,10 +775,10 @@ def run_external_pipeline(repo_dir: Path, dinov2_root: Path):
     print("[OK] Unsupervised pipeline finished")
 
 
-def make_run_output_dir(case_name, source, denoising_method):
+def make_run_output_dir(case_name):
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     return (
-        unsupervised_run_dir(case_name, source, denoising_method)
+        unsupervised_run_dir(case_name)
         / f"{UNSUPERVISED_WANDB_TAG}-{timestamp}"
     )
         
@@ -790,8 +788,6 @@ def make_run_output_dir(case_name, source, denoising_method):
 
 def run_unsupervised_segmentation(
     case_names,
-    source="prepared",
-    denoising_method=None,
 ):
     case_names = normalize_case_names(case_names)
 
@@ -802,19 +798,15 @@ def run_unsupervised_segmentation(
     dinov2_root = ensure_dinov2_repo(repo_dir)
     outputs = []
     for case_name in case_names:
-        output_dir = make_run_output_dir(
-            case_name, source, denoising_method
-        )
+        output_dir = make_run_output_dir(case_name)
         log_io(
             "UNSUPERVISED SEGMENTATION",
-            {"sweep": source_sweep_path(case_name, source, denoising_method)},
+            {"sweep": prepared_sweep_path(case_name)},
             {"run": output_dir},
         )
         prepare_dataset_from_h5(
             repo_dir,
             case_name,
-            source,
-            denoising_method,
         )
         generate_all_configs(repo_dir, output_dir)
         run_external_pipeline(repo_dir, dinov2_root)

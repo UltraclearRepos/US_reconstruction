@@ -34,8 +34,6 @@ def add_surface(viewer, path):
 
 def visualize_case_napari(
     case_name,
-    source="prepared",
-    denoising_method=None,
     model_name=None,
     intensity_methods=("voxel_nearest",),
     segmentation_method="voxel_nearest",
@@ -47,10 +45,10 @@ def visualize_case_napari(
         {
             "case": case_name,
             "intensity root": intensity_reconstruction_path(
-                case_name, source, denoising_method, intensity_methods[0]
+                case_name, intensity_methods[0]
             ).parent,
             "segmentation": segmentation_reconstruction_path(
-                case_name, source, denoising_method, model_name, segmentation_method
+                case_name, model_name, segmentation_method
             ),
         },
         {"display": "napari window"},
@@ -60,7 +58,7 @@ def visualize_case_napari(
     if SHOW_RECONSTRUCTION:
         for method in intensity_methods:
             path = intensity_reconstruction_path(
-                case_name, source, denoising_method, method
+                case_name, method
             )
             if path.exists():
                 volume, spacing = load_volume(path)
@@ -74,8 +72,6 @@ def visualize_case_napari(
 
     predicted_labels = segmentation_reconstruction_path(
         case_name,
-        source,
-        denoising_method,
         model_name,
         segmentation_method,
     )
@@ -116,8 +112,6 @@ def visualize_case_napari(
             GROUND_TRUTH_SURFACES_DIR / case_name,
             predicted_surface_dir(
                 case_name,
-                source,
-                denoising_method,
                 model_name,
                 segmentation_method,
             ),

@@ -26,7 +26,6 @@ from config import (
 from src.utils.paths import (
     ground_truth_volume_path,
     intensity_reconstruction_path,
-    source_parts,
 )
 
 from src.visualization.common import load_volume
@@ -49,13 +48,11 @@ def ensure_dir(path):
     Path(path).mkdir(parents=True, exist_ok=True)
 
 
-def find_reconstruction_files(case_name, source, denoising_method, methods):
+def find_reconstruction_files(case_name, methods):
     return [
         path
         for method in normalize_case_names(methods)
-        if (path := intensity_reconstruction_path(
-            case_name, source, denoising_method, method
-        )).exists()
+        if (path := intensity_reconstruction_path(case_name, method)).exists()
     ]
 
 
@@ -394,9 +391,7 @@ def evaluate_reconstruction_file(case_name, recon_path, gt_path, out_dir):
             print(f"[WARN] {voxel_warning}")
 
     # ------------------------------------------------------------
-    # Właściwe metryki full-reference.
-    # To powinno być liczone tylko dla pełnej rekonstrukcji intensywności,
-    # np. kosartur_denoised_rdpad, NIE dla plików *_class1.npz.
+    # Właściwe metryki full-reference dla rekonstrukcji intensywności.
     # ------------------------------------------------------------
     metrics = {
         "case_name": case_name,
@@ -475,26 +470,20 @@ def write_summary_csv(rows, out_path):
             writer.writerow(row)
 
 
-def evaluate_reconstruction_case_with_gt(
-    case_name, source, denoising_method, methods
-):
+def evaluate_reconstruction_case_with_gt(case_name, methods):
     gt_path = find_gt_volume(case_name)
 
     if gt_path is None:
         print(f"[WARN] No GT volume found for case: {case_name}")
         return []
 
-    recon_files = find_reconstruction_files(
-        case_name, source, denoising_method, methods
-    )
+    recon_files = find_reconstruction_files(case_name, methods)
 
     if not recon_files:
         print(f"[WARN] No reconstruction files found for case: {case_name}")
         return []
 
-    out_dir = EVALUATION_DIR.joinpath(
-        "intensity", case_name, *source_parts(source, denoising_method)
-    )
+    out_dir = EVALUATION_DIR / "intensity" / case_name
 
     rows = []
 
@@ -516,9 +505,7 @@ def evaluate_reconstruction_case_with_gt(
     return rows
 
 
-def evaluate_reconstruction_cases_with_gt(
-    case_names, source, denoising_method=None, methods=None
-):
+def evaluate_reconstruction_cases_with_gt(case_names, methods=None):
     case_names = normalize_case_names(case_names)
 
     if not case_names:
@@ -528,9 +515,7 @@ def evaluate_reconstruction_cases_with_gt(
     all_rows = []
 
     for case_name in case_names:
-        rows = evaluate_reconstruction_case_with_gt(
-            case_name, source, denoising_method, methods
-        )
+        rows = evaluate_reconstruction_case_with_gt(case_name, methods)
         all_rows.extend(rows)
 
     out_dir = EVALUATION_DIR / "intensity" / "summary"

@@ -12,18 +12,16 @@ from src.utils.logging import log_io
 
 def visualize_case_simple(
     case_name,
-    source="prepared",
-    denoising_method=None,
     model_name=None,
     intensity_method="voxel_nearest",
     segmentation_method="voxel_nearest",
 ):
     paths = [
         ("intensity reconstruction", intensity_reconstruction_path(
-            case_name, source, denoising_method, intensity_method
+            case_name, intensity_method
         )),
         ("segmentation reconstruction", segmentation_reconstruction_path(
-            case_name, source, denoising_method, model_name, segmentation_method
+            case_name, model_name, segmentation_method
         )),
         ("ground truth volume", ground_truth_volume_path(case_name)),
         ("ground truth labels", ground_truth_labels_path(case_name)),

@@ -22,7 +22,6 @@ from config import (
 from src.utils.paths import (
     ground_truth_labels_path,
     intensity_reconstruction_path,
-    source_parts,
 )
 
 from src.visualization.common import load_volume
@@ -57,13 +56,11 @@ def safe_float(x):
         return None
 
 
-def find_reconstruction_files(case_name, source, denoising_method, methods):
+def find_reconstruction_files(case_name, methods):
     return [
         path
         for method in normalize_case_names(methods)
-        if (path := intensity_reconstruction_path(
-            case_name, source, denoising_method, method
-        )).exists()
+        if (path := intensity_reconstruction_path(case_name, method)).exists()
     ]
 def find_mask_for_case(case_name):
     gt_path = ground_truth_labels_path(case_name)
@@ -381,12 +378,8 @@ def write_summary_csv(rows, out_path):
             writer.writerow(row)
 
 
-def evaluate_no_reference_case(
-    case_name, source, denoising_method, methods
-):
-    recon_files = find_reconstruction_files(
-        case_name, source, denoising_method, methods
-    )
+def evaluate_no_reference_case(case_name, methods):
+    recon_files = find_reconstruction_files(case_name, methods)
 
     if not recon_files:
         print(f"[WARN] No reconstruction files found for no-reference evaluation: {case_name}")
@@ -394,9 +387,7 @@ def evaluate_no_reference_case(
 
     object_mask = find_mask_for_case(case_name)
 
-    out_dir = EVALUATION_DIR.joinpath(
-        "no_reference", case_name, *source_parts(source, denoising_method)
-    )
+    out_dir = EVALUATION_DIR / "no_reference" / case_name
 
     rows = []
 
@@ -418,9 +409,7 @@ def evaluate_no_reference_case(
     return rows
 
 
-def evaluate_no_reference_cases(
-    case_names, source, denoising_method=None, methods=None
-):
+def evaluate_no_reference_cases(case_names, methods=None):
     case_names = normalize_case_names(case_names)
 
     if not case_names:
@@ -430,9 +419,7 @@ def evaluate_no_reference_cases(
     all_rows = []
 
     for case_name in case_names:
-        rows = evaluate_no_reference_case(
-            case_name, source, denoising_method, methods
-        )
+        rows = evaluate_no_reference_case(case_name, methods)
         all_rows.extend(rows)
 
     out_dir = EVALUATION_DIR / "no_reference" / "summary"

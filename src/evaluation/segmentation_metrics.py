@@ -24,7 +24,6 @@ from config import (
 from src.utils.paths import (
     ground_truth_labels_path,
     segmentation_reconstruction_path,
-    source_parts,
 )
 
 from src.visualization.common import load_volume
@@ -469,8 +468,6 @@ def write_summary_csv(rows, out_path):
 
 def evaluate_segmentation_case(
     case_name,
-    source,
-    denoising_method,
     model_name,
     reconstruction_method,
 ):
@@ -482,8 +479,6 @@ def evaluate_segmentation_case(
 
     recon_path = segmentation_reconstruction_path(
         case_name,
-        source,
-        denoising_method,
         model_name,
         reconstruction_method,
     )
@@ -507,7 +502,6 @@ def evaluate_segmentation_case(
     out_dir = EVALUATION_DIR.joinpath(
         "segmentation",
         case_name,
-        *source_parts(source, denoising_method),
         model_name,
         reconstruction_method,
     )
@@ -550,8 +544,6 @@ def evaluate_segmentation_case(
 
 def evaluate_segmentation_cases(
     case_names,
-    source,
-    denoising_method=None,
     model_name=None,
     reconstruction_method="voxel_nearest",
 ):
@@ -566,8 +558,6 @@ def evaluate_segmentation_cases(
     for case_name in case_names:
         rows = evaluate_segmentation_case(
             case_name,
-            source,
-            denoising_method,
             model_name,
             reconstruction_method,
         )
