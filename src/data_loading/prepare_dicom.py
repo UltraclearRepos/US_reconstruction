@@ -88,7 +88,7 @@ def extract_spacing_xy(ds):
         except Exception:
             pass
 
-    for attr_name in ["ImagerPixelSpacing", "NominalScannedPixelSpacing"]:
+    for attr_name in ["PixelSpacing", "ImagerPixelSpacing", "NominalScannedPixelSpacing"]:
         if hasattr(ds, attr_name):
             try:
                 ps = [float(x) for x in getattr(ds, attr_name)]
