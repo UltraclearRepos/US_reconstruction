@@ -76,41 +76,16 @@ def ensure_zyx(arr):
     raise RuntimeError(f"Unsupported volume shape: {arr.shape}")
 
 
-def extract_spacing_xy(ds):
-    sx, sy = 1.0, 1.0
-    pixel_measures = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0] if hasattr(ds, "SharedFunctionalGroupsSequence") else ds
-    if hasattr(pixel_measures, "PixelSpacing"):
-        try:
-            ps = [float(x) for x in pixel_measures.PixelSpacing]
-            if len(ps) >= 2:
-                sy, sx = ps[0], ps[1]
-                return float(sx), float(sy)
-        except Exception:
-            pass
-
-    for attr_name in ["PixelSpacing", "ImagerPixelSpacing", "NominalScannedPixelSpacing"]:
-        if hasattr(ds, attr_name):
-            try:
-                ps = [float(x) for x in getattr(ds, attr_name)]
-                if len(ps) >= 2:
-                    sy, sx = ps[0], ps[1]
-                    return float(sx), float(sy)
-            except Exception:
-                pass
-
-    return float(sx), float(sy)
+def extract_sweep_spacing_xy(ds):
+    sy, sx = (float(value) for value in ds.PixelSpacing)
+    return sx, sy
 
 
-def extract_spacing_zyx(ds):
-    sx, sy = extract_spacing_xy(ds)
-    pixel_measures = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0] if hasattr(ds, "SharedFunctionalGroupsSequence") else ds
-    sz = 1.0
-    if hasattr(pixel_measures, "SliceThickness"):
-        try:
-            sz = float(pixel_measures.SliceThickness)
-        except Exception:
-            pass
-    return float(sz), float(sy), float(sx)
+def extract_volume_spacing_zyx(ds):
+    pixel_measures = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0]
+    sy, sx = (float(value) for value in pixel_measures.PixelSpacing)
+    sz = float(pixel_measures.SliceThickness)
+    return sz, sy, sx
 
 
 def decode_od_to_float64(raw_value):
@@ -180,7 +155,7 @@ def prepare_case(case_dir):
     describe_dataset(ds_sweep, f"SWEEPS: {case_name}")
 
     img_thw = ensure_thw(to_numpy_pixel_array(ds_sweep))
-    sx, sy = extract_spacing_xy(ds_sweep)
+    sx, sy = extract_sweep_spacing_xy(ds_sweep)
     Ts = extract_poses_from_private_tag_0051_1039(ds_sweep, img_thw.shape[0])
     if Ts is None:
         raise RuntimeError(f"{case_name}: failed to extract poses from sweep DICOM")
@@ -198,7 +173,7 @@ def prepare_case(case_dir):
     if volume_dcm is not None:
         ds_vol = pydicom.dcmread(str(volume_dcm))
         vol_zyx = ensure_zyx(to_numpy_pixel_array(ds_vol))
-        voxel_size_zyx = extract_spacing_zyx(ds_vol)
+        voxel_size_zyx = extract_volume_spacing_zyx(ds_vol)
         save_npz_volume(out_volume_npz, vol_zyx, voxel_size_zyx)
 
     if seg_dcm is not None:
@@ -207,7 +182,7 @@ def prepare_case(case_dir):
         if np.issubdtype(seg_zyx.dtype, np.floating):
             seg_zyx = np.rint(seg_zyx)
         seg_zyx = seg_zyx.astype(np.uint16)
-        voxel_size_zyx = extract_spacing_zyx(ds_seg)
+        voxel_size_zyx = extract_volume_spacing_zyx(ds_seg)
         save_npz_volume(out_seg_labels_npz, seg_zyx, voxel_size_zyx)
 
     print(f"[OK] Prepared case: {case_name}")
