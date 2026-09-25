@@ -14,7 +14,9 @@ input used by every downstream stage.
 data/
 ├── raw/<case>/*.dcm
 ├── prepared/<case>/sweep.h5
-├── segmented/<case>/<model>/labels.h5
+├── segmented/<case>/<model>/
+│   ├── labels.h5
+│   └── images/frame_*.png
 ├── reconstructed/
 │   ├── intensity/<case>/<method>/volume.npz
 │   └── segmentation/<case>/<model>/voxel_nearest/labels.npz
