@@ -22,13 +22,18 @@ from src.visualization.common import load_volume
 from src.utils.logging import log_io
 
 
-def add_surface(viewer, path):
+# Display-only offset in viewer coordinates; does not affect saved data or metrics.
+GT_SHIFT = (0, 0, 20)
+
+
+def add_surface(viewer, path, translate=(0, 0, 0)):
     data = np.load(path, allow_pickle=True)
     viewer.add_surface(
         (data["verts"], data["faces"], data["values"]),
         name=path.stem,
         opacity=0.6,
         shading="smooth",
+        translate=translate,
     )
 
 
@@ -91,6 +96,7 @@ def visualize_case_napari(
                 volume,
                 name="ground_truth/volume",
                 scale=spacing,
+                translate=GT_SHIFT,
                 colormap="green",
                 rendering="mip",
                 opacity=0.35,
@@ -104,6 +110,7 @@ def visualize_case_napari(
                 labels.astype(np.int32),
                 name="ground_truth/labels",
                 scale=spacing,
+                translate=GT_SHIFT,
                 opacity=0.45,
             )
 
@@ -117,7 +124,12 @@ def visualize_case_napari(
             ),
         ]
         for directory in surface_dirs:
+            shift = (
+                GT_SHIFT
+                if directory == GROUND_TRUTH_SURFACES_DIR / case_name
+                else (0, 0, 0)
+            )
             for path in sorted(Path(directory).glob("*_surface.npz")):
-                add_surface(viewer, path)
+                add_surface(viewer, path, translate=shift)
 
     napari.run()
