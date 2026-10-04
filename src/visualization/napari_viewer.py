@@ -23,7 +23,7 @@ from src.utils.logging import log_io
 
 
 # Display-only offset in viewer coordinates; does not affect saved data or metrics.
-GT_SHIFT = (0, 0, 20)
+GT_SHIFT = (40, 20, 0)
 
 
 def add_surface(viewer, path, translate=(0, 0, 0)):
