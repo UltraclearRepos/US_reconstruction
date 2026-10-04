@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import numpy as np
 
@@ -19,6 +20,10 @@ from config import (
     PIXEL_SPACING,
     INTENSITY_RECONSTRUCTION_METHODS,
     SEGMENTATION_RECONSTRUCTION_METHOD,
+    SEGMENTATION_POSTPROCESS_ENABLED,
+    SEGMENTATION_CLOSING_RADIUS_MM,
+    SEGMENTATION_SMOOTHING_SIGMA_MM,
+    SEGMENTATION_SMOOTHING_THRESHOLD,
     SPLINE_ORDER,
     VNN_MEAN_N_NEAREST,
     VOXEL_SIZE,
@@ -146,6 +151,31 @@ def reconstruct_segmentation_case(
         device_str=DEVICE,
     )
     volume = np.rint(volume).astype(np.uint16)
+    postprocessing = {"enabled": bool(SEGMENTATION_POSTPROCESS_ENABLED)}
+    if SEGMENTATION_POSTPROCESS_ENABLED:
+        from src.reconstruction.mask_postprocessing import postprocess_segmentation_labels
+
+        volume, class_report = postprocess_segmentation_labels(
+            volume,
+            spacing_zyx=np.asarray(voxel)[::-1],
+            closing_radius_mm=SEGMENTATION_CLOSING_RADIUS_MM,
+            smoothing_sigma_mm=SEGMENTATION_SMOOTHING_SIGMA_MM,
+            smoothing_threshold=SEGMENTATION_SMOOTHING_THRESHOLD,
+        )
+        postprocessing.update(
+            closing_radius_mm=SEGMENTATION_CLOSING_RADIUS_MM,
+            smoothing_sigma_mm=SEGMENTATION_SMOOTHING_SIGMA_MM,
+            smoothing_threshold=SEGMENTATION_SMOOTHING_THRESHOLD,
+            classes=class_report,
+        )
+        for item in class_report:
+            print(
+                f"[MASK POSTPROCESS] class={item['class_id']}: "
+                f"components {item['components_before']} -> "
+                f"{item['components_after_closing']} after closing -> "
+                f"{item['components_after']} final; "
+                f"voxels {item['voxels_before']} -> {item['voxels_after']}"
+            )
     output_npz = out_dir / "labels.npz"
     save_reconstruction_npz(
         output_npz,
@@ -158,6 +188,7 @@ def reconstruct_segmentation_case(
             "content_type": np.array("segmentation_labels"),
             "model_name": np.array(model_name),
             "classes": np.unique(volume),
+            "segmentation_postprocessing": np.array(json.dumps(postprocessing)),
         },
     )
     return output_npz

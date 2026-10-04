@@ -73,6 +73,32 @@ Multiclass segmentation uses `voxel_nearest` reconstruction. Averaging methods
 are reserved for intensity because averaging class IDs would create invalid
 labels.
 
+Reconstructed segmentation is postprocessed before `labels.npz` is saved.
+For each non-background class the pipeline closes small gaps with a spherical
+3D footprint, retains the largest 26-connected component, and applies Gaussian
+smoothing followed by thresholding. A final component check removes fragments
+split off by smoothing or class overlap resolution. Processing never grows a
+class into another class's original voxels; overlapping expansions into
+background use the highest smoothed score (ties use the lower class ID).
+If smoothing would erase a tiny class completely, its cleaned mask is retained.
+
+The controls in `config.py` are `SEGMENTATION_POSTPROCESS_ENABLED` (default
+`True`), `SEGMENTATION_CLOSING_RADIUS_MM` (`0.6` mm),
+`SEGMENTATION_SMOOTHING_SIGMA_MM` (`0.4` mm), and
+`SEGMENTATION_SMOOTHING_THRESHOLD` (`0.5`). A zero radius or sigma skips that
+operation. Closing can join nearby fragments, but its radius is not an exact
+maximum gap distance: the result also depends on fragment geometry. Increase
+the radius cautiously if real parts remain disconnected. Spacing is handled
+in physical units, including anisotropic voxels.
+
+Postprocessing changes the saved labels used by surfaces, viewing and metrics.
+Intensity and ground truth are unaffected. Reconstruction `weights` still
+describe the original sampling support, not smoothing confidence. The NPZ
+includes processing parameters and per-class counts in the JSON string
+`segmentation_postprocessing`. To refresh existing results, enable
+`RUN_RECONSTRUCT_SEGMENTATION` and `RUN_EXTRACT_SEGMENTATION_SURFACES` in
+`main.py`; existing 2D segmentations can be reused.
+
 Surface extraction accepts only reconstructed segmentation labels. Intensity
 volumes are not an input to this stage.
 
