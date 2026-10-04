@@ -6,6 +6,16 @@ import torch
 from src.data_loading.sweep import load_sweep_h5
 
 
+def validate_max_plane_dist(max_plane_dist):
+    """Validate an optional perpendicular plane distance in millimetres."""
+    if max_plane_dist is None:
+        return None
+    value = float(max_plane_dist)
+    if not np.isfinite(value) or value < 0:
+        raise ValueError("max_plane_dist must be finite and nonnegative, or None")
+    return value
+
+
 def load_image_and_poses(path, image_key=None):
     result = load_sweep_h5(path, image_key=image_key)
     print(f"[INFO] file='{Path(path).name}', image_key='{result[3]}', shape={result[0].shape}")

@@ -5,6 +5,7 @@ import torch
 
 from config import (
     VOXEL_SIZE,
+    RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
     PIXEL_SPACING,
     BACKGROUND_THRESHOLD,
     CENTER,
@@ -16,6 +17,7 @@ from config import (
 
 from src.reconstruction.common import (
     load_image_and_poses,
+    validate_max_plane_dist,
     is_binary_input_from_key,
     compute_volume_geometry,
     auto_chunk_pixels,
@@ -39,7 +41,9 @@ def voxel_nearest_mean_reconstruct_torch(
     binary_input=False,
     n_nearest=4,
     device_str="cuda",
+    max_plane_dist=None,
 ):
+    max_plane_dist = validate_max_plane_dist(max_plane_dist)
     device = torch.device(device_str)
 
     Tn, H, W = img.shape
@@ -66,7 +70,8 @@ def voxel_nearest_mean_reconstruct_torch(
     print(
         f"[INFO] voxel_nearest_mean reconstruction: "
         f"volume=(Dz={Dz}, Dy={Dy}, Dx={Dx}), voxels={N}, "
-        f"chunk={chunk_pixels}, n_nearest={n_nearest}, device={device}"
+        f"chunk={chunk_pixels}, n_nearest={n_nearest}, "
+        f"max_plane_dist={max_plane_dist} mm, device={device}"
     )
 
     Ts_t = torch.from_numpy(Ts).to(device=device, dtype=torch.float32)
@@ -113,6 +118,10 @@ def voxel_nearest_mean_reconstruct_torch(
         u = u_t.detach().cpu().numpy().astype(np.float32)
         v = v_t.detach().cpu().numpy().astype(np.float32)
 
+        within_distance = None
+        if max_plane_dist is not None:
+            within_distance = (nearest_dist_t <= max_plane_dist).detach().cpu().numpy()
+
         sum_vals = np.zeros((M,), dtype=np.float32)
         sum_wts = np.zeros((M,), dtype=np.float32)
 
@@ -123,6 +132,9 @@ def voxel_nearest_mean_reconstruct_torch(
                 u=u[:, k],
                 v=v[:, k],
             )
+
+            if within_distance is not None:
+                inside = inside & within_distance[:, k]
 
             vals_use, valid = apply_validity(
                 vals=vals,
@@ -160,6 +172,7 @@ def reconstruct_voxel_nearest_mean_for_file(
     image_key=IMAGE_KEY,
     n_nearest=VNN_MEAN_N_NEAREST,
     device_str=DEVICE,
+    max_plane_dist=RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
 ):
     path = Path(path)
     base = path.stem
@@ -190,6 +203,7 @@ def reconstruct_voxel_nearest_mean_for_file(
         binary_input=is_mask,
         n_nearest=n_nearest,
         device_str=device_str,
+        max_plane_dist=max_plane_dist,
     )
 
     finalize_and_save(
@@ -201,6 +215,7 @@ def reconstruct_voxel_nearest_mean_for_file(
         origin=origin,
         method="voxel_nearest_mean",
         extra={
+            "max_plane_dist": np.float32(-1.0 if max_plane_dist is None else max_plane_dist),
             "n_nearest": np.int32(n_nearest),
         },
     )

@@ -73,6 +73,22 @@ Multiclass segmentation uses `voxel_nearest` reconstruction. Averaging methods
 are reserved for intensity because averaging class IDs would create invalid
 labels.
 
+`RECONSTRUCTION_MAX_PLANE_DISTANCE_MM` in `config.py` limits the perpendicular
+distance from a voxel centre to a frame plane for **all reconstruction methods**,
+both intensity and segmentation. The initial setting is `1.0` mm; it has not
+been tuned on the data. A frame contributes only when the distance is less than
+or equal to the limit and the existing image-boundary/background checks pass.
+Methods using multiple frames exclude each distant frame before aggregation
+and normalize using only accepted contributions. With no valid contribution,
+the reconstructed value and `weights` are both zero. Distance uses the pose
+coordinate units (expected millimetres and rigid transforms), not voxel counts.
+`None` disables the limit; zero accepts only voxel centres on a frame plane.
+Negative and nonfinite limits are rejected. This shared setting replaces
+`DWR_MAX_PLANE_DIST`. Each output NPZ records `max_plane_dist` in mm (`-1` means
+disabled). Too small a limit can leave gaps between sparsely acquired frames.
+The limit applies during reconstruction; the subsequent segmentation closing
+and smoothing may expand labels into voxels without original sampling support.
+
 Reconstructed segmentation is postprocessed before `labels.npz` is saved.
 For each non-background class the pipeline closes small gaps with a spherical
 3D footprint, retains the largest 26-connected component, and applies Gaussian

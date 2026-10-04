@@ -5,6 +5,7 @@ import torch
 
 from config import (
     VOXEL_SIZE,
+    RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
     PIXEL_SPACING,
     BACKGROUND_THRESHOLD,
     CENTER,
@@ -15,11 +16,11 @@ from config import (
     DWR_DISTANCE_POWER,
     DWR_DISTANCE_EPS,
     DWR_INTERP,
-    DWR_MAX_PLANE_DIST,
 )
 
 from src.reconstruction.common import (
     load_image_and_poses,
+    validate_max_plane_dist,
     is_binary_input_from_key,
     compute_volume_geometry,
     auto_chunk_pixels,
@@ -52,6 +53,7 @@ def distance_weighted_reconstruct_torch(
     if interp not in ("nearest", "bilinear"):
         raise ValueError("interp musi być 'nearest' albo 'bilinear'.")
 
+    max_plane_dist = validate_max_plane_dist(max_plane_dist)
     device = torch.device(device_str)
 
     Tn, H, W = img.shape
@@ -195,7 +197,7 @@ def reconstruct_distance_weighted_for_file(
     distance_power=DWR_DISTANCE_POWER,
     distance_eps=DWR_DISTANCE_EPS,
     interp=DWR_INTERP,
-    max_plane_dist=DWR_MAX_PLANE_DIST,
+    max_plane_dist=RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
     device_str=DEVICE,
 ):
     path = Path(path)

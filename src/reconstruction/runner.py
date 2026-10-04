@@ -13,7 +13,7 @@ from config import (
     DWR_DISTANCE_EPS,
     DWR_DISTANCE_POWER,
     DWR_INTERP,
-    DWR_MAX_PLANE_DIST,
+    RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
     DWR_N_NEAREST,
     IMAGE_KEY,
     N_NEAREST,
@@ -74,6 +74,7 @@ def reconstruct_file_with_method(path, out_dir, method):
         chunk_pixels=CHUNK_PIXELS,
         image_key=IMAGE_KEY,
         device_str=DEVICE,
+        max_plane_dist=RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
     )
     if method == "bspline":
         common.update(
@@ -90,7 +91,6 @@ def reconstruct_file_with_method(path, out_dir, method):
             distance_power=DWR_DISTANCE_POWER,
             distance_eps=DWR_DISTANCE_EPS,
             interp=DWR_INTERP,
-            max_plane_dist=DWR_MAX_PLANE_DIST,
         )
     fn(**common)
 
@@ -149,6 +149,7 @@ def reconstruct_segmentation_case(
         chunk_pixels=CHUNK_PIXELS,
         binary_input=False,
         device_str=DEVICE,
+        max_plane_dist=RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
     )
     volume = np.rint(volume).astype(np.uint16)
     postprocessing = {"enabled": bool(SEGMENTATION_POSTPROCESS_ENABLED)}
@@ -185,6 +186,10 @@ def reconstruct_segmentation_case(
         origin,
         method,
         extra={
+            "max_plane_dist": np.float32(
+                -1.0 if RECONSTRUCTION_MAX_PLANE_DISTANCE_MM is None
+                else RECONSTRUCTION_MAX_PLANE_DISTANCE_MM
+            ),
             "content_type": np.array("segmentation_labels"),
             "model_name": np.array(model_name),
             "classes": np.unique(volume),

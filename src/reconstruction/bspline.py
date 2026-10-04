@@ -6,6 +6,7 @@ from scipy.ndimage import map_coordinates, spline_filter
 
 from config import (
     VOXEL_SIZE,
+    RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
     PIXEL_SPACING,
     BACKGROUND_THRESHOLD,
     CENTER,
@@ -20,6 +21,7 @@ from config import (
 
 from src.reconstruction.common import (
     load_image_and_poses,
+    validate_max_plane_dist,
     is_binary_input_from_key,
     compute_volume_geometry,
     auto_chunk_pixels,
@@ -115,6 +117,7 @@ def bspline_reconstruct_hybrid_torch(
     distance_eps=1e-6,
     distance_power=1.0,
     device_str="cuda",
+    max_plane_dist=None,
 ):
     """
     Hybrid GPU/CPU B-spline reconstruction.
@@ -127,6 +130,7 @@ def bspline_reconstruct_hybrid_torch(
       - scipy B-spline sampling,
       - agregacja wartości.
     """
+    max_plane_dist = validate_max_plane_dist(max_plane_dist)
     device = torch.device(device_str)
 
     Tn, H, W = img.shape
@@ -158,7 +162,7 @@ def bspline_reconstruct_hybrid_torch(
         f"volume=(Dz={Dz}, Dy={Dy}, Dx={Dx}), "
         f"voxels={N}, chunk={chunk_pixels}, "
         f"n_nearest={n_nearest}, spline_order={spline_order}, "
-        f"device={device}"
+        f"max_plane_dist={max_plane_dist} mm, device={device}"
     )
 
     Ts_t = torch.from_numpy(Ts).to(device=device, dtype=torch.float32)
@@ -230,6 +234,9 @@ def bspline_reconstruct_hybrid_torch(
             & (v_t >= 0.0)
             & (v_t <= (H - 1))
         )
+
+        if max_plane_dist is not None:
+            inside_t = inside_t & (nearest_dist_t <= max_plane_dist)
 
         nearest_idx = nearest_idx_t.detach().cpu().numpy().astype(np.int32, copy=False)
         nearest_dist = nearest_dist_t.detach().cpu().numpy().astype(np.float32, copy=False)
@@ -307,6 +314,7 @@ def reconstruct_bspline_for_file(
     distance_eps=DISTANCE_EPS,
     distance_power=DISTANCE_POWER,
     device_str=DEVICE,
+    max_plane_dist=RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
 ):
     """
     Rekonstrukcja B-spline dla jednego pliku H5.
@@ -350,6 +358,7 @@ def reconstruct_bspline_for_file(
         distance_eps=distance_eps,
         distance_power=distance_power,
         device_str=device_str,
+        max_plane_dist=max_plane_dist,
     )
 
     finalize_and_save(
@@ -361,6 +370,7 @@ def reconstruct_bspline_for_file(
         origin=origin,
         method="bspline",
         extra={
+            "max_plane_dist": np.float32(-1.0 if max_plane_dist is None else max_plane_dist),
             "n_nearest": np.int32(n_nearest),
             "spline_order": np.int32(spline_order),
             "distance_power": np.float32(distance_power),

@@ -88,6 +88,9 @@ INTENSITY_RECONSTRUCTION_METHODS = ["voxel_nearest"]
 # Multiclass segmentation must use nearest-neighbour reconstruction because
 # averaging methods would produce invalid class IDs.
 SEGMENTATION_RECONSTRUCTION_METHOD = "voxel_nearest"
+# Maximum perpendicular voxel-to-frame distance in mm; None disables the limit.
+# Initial value to tune against acquisition spacing. Applies to all methods.
+RECONSTRUCTION_MAX_PLANE_DISTANCE_MM = 1.0
 VOXEL_SIZE = (0.2, 0.2, 0.2)
 PIXEL_SPACING = None
 BACKGROUND_THRESHOLD = 0.0
@@ -107,7 +110,6 @@ DWR_N_NEAREST = 4
 DWR_DISTANCE_POWER = 2.0
 DWR_DISTANCE_EPS = 1e-6
 DWR_INTERP = "bilinear"
-DWR_MAX_PLANE_DIST = None
 
 
 # Postprocessing of reconstructed segmentation only (distances in mm).

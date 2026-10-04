@@ -5,6 +5,7 @@ import torch
 
 from config import (
     VOXEL_SIZE,
+    RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
     PIXEL_SPACING,
     BACKGROUND_THRESHOLD,
     CENTER,
@@ -15,6 +16,7 @@ from config import (
 
 from src.reconstruction.common import (
     load_image_and_poses,
+    validate_max_plane_dist,
     is_binary_input_from_key,
     compute_volume_geometry,
     auto_chunk_pixels,
@@ -37,7 +39,9 @@ def voxel_nearest_reconstruct_torch(
     chunk_pixels=None,
     binary_input=False,
     device_str="cuda",
+    max_plane_dist=None,
 ):
+    max_plane_dist = validate_max_plane_dist(max_plane_dist)
     device = torch.device(device_str)
 
     Tn, H, W = img.shape
@@ -62,7 +66,7 @@ def voxel_nearest_reconstruct_torch(
     print(
         f"[INFO] voxel_nearest reconstruction: "
         f"volume=(Dz={Dz}, Dy={Dy}, Dx={Dx}), voxels={N}, "
-        f"chunk={chunk_pixels}, device={device}"
+        f"chunk={chunk_pixels}, max_plane_dist={max_plane_dist} mm, device={device}"
     )
 
     Ts_t = torch.from_numpy(Ts).to(device=device, dtype=torch.float32)
@@ -105,6 +109,10 @@ def voxel_nearest_reconstruct_torch(
         v = v_t.detach().cpu().numpy().astype(np.float32)
 
         vals, inside = nearest_sample_numpy(img, frame_idx, u, v)
+        if max_plane_dist is not None:
+            within_distance = (nearest_dist_t <= max_plane_dist).detach().cpu().numpy()
+            inside = inside & within_distance
+
         vals_use, valid = apply_validity(
             vals=vals,
             inside=inside,
@@ -133,6 +141,7 @@ def reconstruct_voxel_nearest_for_file(
     chunk_pixels=CHUNK_PIXELS,
     image_key=IMAGE_KEY,
     device_str=DEVICE,
+    max_plane_dist=RECONSTRUCTION_MAX_PLANE_DISTANCE_MM,
 ):
     path = Path(path)
     base = path.stem
@@ -162,6 +171,7 @@ def reconstruct_voxel_nearest_for_file(
         chunk_pixels=chunk_pixels,
         binary_input=is_mask,
         device_str=device_str,
+        max_plane_dist=max_plane_dist,
     )
 
     finalize_and_save(
@@ -172,5 +182,7 @@ def reconstruct_voxel_nearest_for_file(
         voxel=voxel,
         origin=origin,
         method="voxel_nearest",
-        extra={},
+        extra={
+            "max_plane_dist": np.float32(-1.0 if max_plane_dist is None else max_plane_dist),
+        },
     )
