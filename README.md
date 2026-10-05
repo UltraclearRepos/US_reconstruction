@@ -90,13 +90,13 @@ The limit applies during reconstruction; the subsequent segmentation closing
 and smoothing may expand labels into voxels without original sampling support.
 
 Reconstructed segmentation is postprocessed before `labels.npz` is saved.
-For each non-background class the pipeline closes small gaps with a spherical
-3D footprint, retains the largest 26-connected component, and applies Gaussian
-smoothing followed by thresholding. A final component check removes fragments
-split off by smoothing or class overlap resolution. Processing never grows a
-class into another class's original voxels; overlapping expansions into
-background use the highest smoothed score (ties use the lower class ID).
-If smoothing would erase a tiny class completely, its cleaned mask is retained.
+Postprocessing expects background zero and at most one non-background class;
+multiclass input is rejected and the original foreground class ID is preserved.
+The pipeline closes small gaps with a spherical 3D footprint, retains the
+largest 26-connected component, and applies Gaussian smoothing followed by
+thresholding. Another largest-component selection removes fragments split off
+by smoothing. If smoothing would erase the class completely, its cleaned mask
+is retained. An empty input produces an empty output and an empty class report.
 
 The controls in `config.py` are `SEGMENTATION_POSTPROCESS_ENABLED` (default
 `True`), `SEGMENTATION_CLOSING_RADIUS_MM` (`0.6` mm),

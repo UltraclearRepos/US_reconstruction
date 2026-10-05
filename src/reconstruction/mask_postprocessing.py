@@ -42,13 +42,12 @@ def postprocess_segmentation_labels(
     smoothing_sigma_mm=0.4,
     smoothing_threshold=0.5,
 ):
-    """Return integer labels and a per-class processing report.
+    """Clean one foreground class and return integer labels with a report.
 
-    Each nonzero class undergoes closing, largest-component selection and
-    Gaussian smoothing followed by thresholding. A final component check
-    prevents smoothing or class conflicts from leaving detached fragments.
-    Classes compete by their smoothed scores only in original background;
-    they cannot grow into another class's original voxels. No input is mutated.
+    Background is zero; the single nonzero class keeps its original ID.
+    Closing is followed by largest-component selection, Gaussian smoothing
+    and thresholding, then another largest-component selection.
+    Multiclass input is rejected. No input is mutated.
     """
     labels = np.asarray(labels)
     spacing = np.asarray(spacing_zyx, dtype=float)
@@ -65,73 +64,67 @@ def postprocess_segmentation_labels(
     if not np.isfinite(smoothing_threshold) or not 0 < smoothing_threshold < 1:
         raise ValueError("smoothing_threshold must be between zero and one")
 
-    sigma = smoothing_sigma_mm / spacing
-    footprint = physical_ball(closing_radius_mm, spacing)
-    closing_pad = np.asarray(footprint.shape) // 2
-    margin = closing_pad + np.ceil(4 * sigma).astype(int) + 1
-    output = np.zeros_like(labels)
-    best_scores = np.zeros(labels.shape, dtype=np.float32)
-    report = []
+    class_ids = np.unique(labels)
+    class_ids = class_ids[class_ids != 0]
+    if class_ids.size > 1:
+        raise ValueError("Expected background zero and at most one nonzero class")
+    processed_labels = np.zeros_like(labels)
+    if class_ids.size == 0:
+        return processed_labels, []
+    class_id = class_ids[0]
 
-    for class_id in np.unique(labels):
-        if class_id == 0:
-            continue
-        full_mask = labels == class_id
-        region = mask_bounds(full_mask, margin)
-        mask = full_mask[region].copy()
-        del full_mask
-        original_voxels = int(mask.sum())
-        _, components_before = ndi.label(mask, structure=CONNECTIVITY)
-        available = (labels[region] == 0) | (labels[region] == class_id)
+    sigma_voxels = smoothing_sigma_mm / spacing
+    closing_footprint = physical_ball(closing_radius_mm, spacing)
+    closing_padding = np.asarray(closing_footprint.shape) // 2
+    crop_margin = closing_padding + np.ceil(4 * sigma_voxels).astype(int) + 1
 
-        if closing_radius_mm > 0:
-            # Pad beyond the volume edge so closing does not erode edge objects.
-            pad = [(int(n), int(n)) for n in closing_pad]
-            padded = np.pad(mask, pad, mode="constant")
-            closed = ndi.binary_closing(padded, structure=footprint)
-            unpad = tuple(slice(int(n), int(n) + size)
-                          for n, size in zip(closing_pad, mask.shape))
-            mask = closed[unpad] & available
+    mask = labels == class_id
+    region = mask_bounds(mask, crop_margin)
+    mask = mask[region].copy()
+    original_voxels = int(mask.sum())
+    _, components_before = ndi.label(mask, structure=CONNECTIVITY)
 
-        mask, components_after_closing = largest_component(mask)
-        if smoothing_sigma_mm > 0:
-            scores = ndi.gaussian_filter(mask.astype(np.float32), sigma=sigma,
-                                         mode="constant", cval=0.0)
-        else:
-            scores = mask.astype(np.float32)
-        candidate = (scores >= smoothing_threshold) & available
-        smoothing_fallback = not candidate.any()
-        if smoothing_fallback:
-            # A tiny class can vanish under Gaussian thresholding. Retain it.
-            candidate = mask.copy()
-            scores = mask.astype(np.float32)
-        candidate, _ = largest_component(candidate)
-        output_region = output[region]
-        score_region = best_scores[region]
-        replace = candidate & (scores > score_region)
-        output_region[replace] = class_id
-        score_region[replace] = scores[replace]
-        report.append({
-            "class_id": int(class_id),
-            "voxels_before": original_voxels,
-            "components_before": int(components_before),
-            "components_after_closing": int(components_after_closing),
-            "smoothing_fallback": bool(smoothing_fallback),
-        })
+    if closing_radius_mm > 0:
+        original_region = tuple(
+            slice(int(n), int(n) + size)
+            for n, size in zip(closing_padding, mask.shape)
+        )
+        padding = [(int(n), int(n)) for n in closing_padding]
+        mask = np.pad(mask, padding, mode="constant")
+        mask = ndi.binary_closing(mask, structure=closing_footprint)
+        mask = mask[original_region]
 
-    # Resolving overlapping class expansions can split a previously connected mask.
-    for item in report:
-        class_id = item["class_id"]
-        full_mask = output == class_id
-        if full_mask.any():
-            region = mask_bounds(full_mask, np.zeros(3, dtype=int))
-            mask = full_mask[region]
-            kept, _ = largest_component(mask)
-            output_region = output[region]
-            output_region[mask & ~kept] = 0
-            item["voxels_after"] = int(kept.sum())
-            item["components_after"] = 1
-        else:
-            item["voxels_after"] = 0
-            item["components_after"] = 0
-    return output, report
+    mask, components_after_closing = largest_component(mask)
+
+    mask_before_smoothing = mask.copy()
+    if smoothing_sigma_mm > 0:
+        scores = ndi.gaussian_filter(
+            mask.astype(np.float32),
+            sigma=sigma_voxels,
+            mode="constant",
+            cval=0.0,
+        )
+    else:
+        scores = mask.astype(np.float32)
+
+    mask = scores >= smoothing_threshold
+    smoothing_fallback = not mask.any()
+    if smoothing_fallback:
+        mask = mask_before_smoothing
+
+    mask, _ = largest_component(mask)
+
+    processed_labels[region] = np.where(mask, class_id, 0)
+
+    voxels_after = int(mask.sum())
+    report = [{
+        "class_id": int(class_id),
+        "voxels_before": original_voxels,
+        "components_before": int(components_before),
+        "components_after_closing": int(components_after_closing),
+        "smoothing_fallback": bool(smoothing_fallback),
+        "voxels_after": voxels_after,
+        "components_after": int(voxels_after > 0),
+    }]
+
+    return processed_labels, report
