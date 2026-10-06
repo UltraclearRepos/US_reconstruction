@@ -109,7 +109,7 @@ def segment_case(
     output_h5 = segmentation_path(case_name, model_name)
     images_dir = output_h5.parent / "images"
     log_io(
-        "SUPERVISED SEGMENTATION",
+        "SEGMENTATION",
         {"sweep": source_h5},
         {"labels": output_h5, "overlay images": images_dir},
     )

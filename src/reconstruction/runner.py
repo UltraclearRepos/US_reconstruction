@@ -43,7 +43,7 @@ from src.utils.paths import (
     segmentation_path,
     segmentation_reconstruction_dir,
 )
-from src.utils.logging import log_io
+from src.utils.logging import log_io, timed_stage
 
 
 METHODS = {
@@ -156,13 +156,14 @@ def reconstruct_segmentation_case(
     if SEGMENTATION_POSTPROCESS_ENABLED:
         from src.reconstruction.mask_postprocessing import postprocess_segmentation_labels
 
-        processed_volume, class_report = postprocess_segmentation_labels(
-            volume,
-            spacing_zyx=np.asarray(voxel)[::-1],
-            closing_radius_mm=SEGMENTATION_CLOSING_RADIUS_MM,
-            smoothing_sigma_mm=SEGMENTATION_SMOOTHING_SIGMA_MM,
-            smoothing_threshold=SEGMENTATION_SMOOTHING_THRESHOLD,
-        )
+        with timed_stage(f"SEGMENTATION POSTPROCESS {case_name}/{model_name}"):
+            processed_volume, class_report = postprocess_segmentation_labels(
+                volume,
+                spacing_zyx=np.asarray(voxel)[::-1],
+                closing_radius_mm=SEGMENTATION_CLOSING_RADIUS_MM,
+                smoothing_sigma_mm=SEGMENTATION_SMOOTHING_SIGMA_MM,
+                smoothing_threshold=SEGMENTATION_SMOOTHING_THRESHOLD,
+            )
         volume = processed_volume
         postprocessing.update(
             closing_radius_mm=SEGMENTATION_CLOSING_RADIUS_MM,

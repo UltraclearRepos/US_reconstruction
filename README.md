@@ -27,7 +27,6 @@ data/
     ├── ground_truth/<case>/
     └── predicted/<case>/<model>/voxel_nearest/
 
-runs/unsupervised/<case>/<run>/
 reports/evaluation/{intensity,segmentation,no_reference}/
 models/segmentation/
 ```
@@ -48,11 +47,21 @@ Enable only the required stages:
 
 ```python
 RUN_PREPARE_DATA = True
-RUN_SUPERVISED_SEGMENTATION = True
+RUN_SEGMENTATION = True
 RUN_RECONSTRUCT_INTENSITY = True
 RUN_RECONSTRUCT_SEGMENTATION = True
 RUN_EXTRACT_SEGMENTATION_SURFACES = True
 ```
+
+Every enabled pipeline stage prints `[TIME] <stage>: START` and its elapsed
+wall-clock seconds on completion. Evaluation branches are timed separately;
+segmentation postprocessing is timed as one complete operation inside
+segmentation reconstruction. `PIPELINE TOTAL` includes all enabled stages.
+A failing or interrupted stage prints `FAILED` with its elapsed time and
+propagates the error. Measurements include imports, data loading and saving
+inside each stage. Parent times include their nested stages and should not be
+added together. Visualization times include time spent in an open interactive
+viewer; they finish when its call returns, usually after the window is closed.
 
 Stages do not have to run in one invocation. Reconstruction can read an
 existing segmentation with earlier switches disabled.
@@ -61,13 +70,12 @@ Choose the segmentation artifacts used downstream:
 
 ```python
 SEGMENTATION_RESULT_MODELS = [SEGMENTATION_MODEL_NAME]
-# or:
-SEGMENTATION_RESULT_MODELS = ["unsupervised_crf"]
 ```
 
-Unsupervised runs are stored under `runs/unsupervised` and imported into the
-same `data/segmented/<case>/<model>/labels.h5` contract as supervised results.
-Each run gets a timestamped directory and does not delete an earlier run.
+Segmentation runs the local U-Net with `SEGMENTATION_CHECKPOINT` and writes
+`data/segmented/<case>/<model>/labels.h5`. Reconstruction, surface extraction,
+visualization and evaluation read this artifact. The pipeline does not require
+an external segmentation tool.
 
 Multiclass segmentation uses `voxel_nearest` reconstruction. Averaging methods
 are reserved for intensity because averaging class IDs would create invalid
@@ -98,6 +106,31 @@ thresholding. Another largest-component selection removes fragments split off
 by smoothing. If smoothing would erase the class completely, its cleaned mask
 is retained. An empty input produces an empty output and an empty class report.
 
+Segmentation postprocessing uses CuPy and `cupyx.scipy.ndimage` on the
+current CUDA device (GPU 0 by default). It does not change the active device;
+`DEVICE` continues to configure reconstruction.
+The sequence of operations, single working `mask` and Gaussian `scores`
+are unchanged. Input validation, crop preparation and assembly of the saved
+NumPy volume remain on CPU. The cropped mask is uploaded once and the final
+mask is downloaded with synchronization, so the stage timer includes completed
+GPU work and transfers. The console and class report identify the actual GPU;
+the class report is also saved in the NPZ processing metadata.
+There is one GPU implementation, requiring CuPy and a working CUDA device.
+The first GPU run may include kernel compilation time. Floating-point rounding
+near the smoothing threshold can cause small differences from the former
+SciPy implementation.
+
+This WSL environment has CUDA Toolkit 12.8; its GPU dependency is
+`cupy-cuda12x>=14.0,<15.0` in `requirements.txt`. Install it with:
+
+```bash
+.venv/bin/python -m pip install 'cupy-cuda12x>=14.0,<15.0'
+```
+
+For a different CUDA Toolkit, use the matching wheel from the
+[CuPy installation instructions](https://docs.cupy.dev/en/stable/install.html).
+Install only one CuPy wheel variant in an environment.
+
 The controls in `config.py` are `SEGMENTATION_POSTPROCESS_ENABLED` (default
 `True`), `SEGMENTATION_CLOSING_RADIUS_MM` (`0.6` mm),
 `SEGMENTATION_SMOOTHING_SIGMA_MM` (`0.4` mm), and
@@ -123,6 +156,18 @@ Run:
 ```bash
 .venv/bin/python main.py
 ```
+
+On Linux/WSLg with Wayland, the Napari viewer defaults to
+`QT_QPA_PLATFORM=xcb` and `PYOPENGL_PLATFORM=glx` before importing Napari.
+This pairs Qt's X11 context with PyOpenGL's GLX backend to avoid
+`Attempt to retrieve context when no valid context`.
+Explicit environment overrides are preserved.
+See the [Napari workaround](https://github.com/napari/napari/pull/9009).
+
+If activating a moved virtual environment still loads packages from
+`~/.local`, check that `VIRTUAL_ENV` in `.venv/bin/activate` points to the
+current project directory. Reactivate it after correcting the path, or use
+`.venv/bin/python` directly. Use `.venv/bin/python -m pip` for package installation.
 
 Evaluation is terminal output, not input data, and is written under
 `reports/evaluation`. Ground truth is prepared only from separately supplied

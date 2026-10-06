@@ -10,7 +10,6 @@ from config import (
     GROUND_TRUTH_DIR,
     PREDICTED_SURFACES_DIR,
     GROUND_TRUTH_SURFACES_DIR,
-    UNSUPERVISED_RUNS_DIR,
 )
 
 
@@ -56,10 +55,6 @@ def ground_truth_labels_path(case_name):
 
 def ground_truth_surface_dir(case_name):
     return GROUND_TRUTH_SURFACES_DIR / case_name
-
-
-def unsupervised_run_dir(case_name):
-    return UNSUPERVISED_RUNS_DIR / case_name
 
 
 def list_cases(root):

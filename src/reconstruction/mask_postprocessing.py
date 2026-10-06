@@ -1,10 +1,12 @@
 """Connect, clean and smooth reconstructed labels in physical 3D space."""
 
 import numpy as np
-from scipy import ndimage as ndi
+import cupy as cp
+from cupyx.scipy import ndimage as ndi
+from scipy.ndimage import generate_binary_structure
 
 
-CONNECTIVITY = ndi.generate_binary_structure(3, 3)
+CONNECTIVITY = generate_binary_structure(3, 3)
 
 
 def largest_component(mask):
@@ -12,7 +14,7 @@ def largest_component(mask):
     components, count = ndi.label(mask, structure=CONNECTIVITY)
     if count <= 1:
         return mask.copy(), count
-    sizes = np.bincount(components.ravel())
+    sizes = cp.bincount(components.ravel())
     sizes[0] = 0
     return components == sizes.argmax(), count
 
@@ -47,6 +49,7 @@ def postprocess_segmentation_labels(
     Background is zero; the single nonzero class keeps its original ID.
     Closing is followed by largest-component selection, Gaussian smoothing
     and thresholding, then another largest-component selection.
+    Processing uses CuPy on CUDA; input/output and crop preparation use NumPy.
     Multiclass input is rejected. No input is mutated.
     """
     labels = np.asarray(labels)
@@ -82,7 +85,11 @@ def postprocess_segmentation_labels(
     region = mask_bounds(mask, crop_margin)
     mask = mask[region].copy()
     original_voxels = int(mask.sum())
-    _, components_before = ndi.label(mask, structure=CONNECTIVITY)
+    device_id = cp.cuda.runtime.getDevice()
+    print(f"[MASK POSTPROCESS] device=cuda:{device_id}", flush=True)
+    mask = cp.asarray(mask)
+    closing_footprint = cp.asarray(closing_footprint)
+    components_before = int(ndi.label(mask, structure=CONNECTIVITY)[1])
 
     if closing_radius_mm > 0:
         original_region = tuple(
@@ -90,7 +97,7 @@ def postprocess_segmentation_labels(
             for n, size in zip(closing_padding, mask.shape)
         )
         padding = [(int(n), int(n)) for n in closing_padding]
-        mask = np.pad(mask, padding, mode="constant")
+        mask = cp.pad(mask, padding, mode="constant")
         mask = ndi.binary_closing(mask, structure=closing_footprint)
         mask = mask[original_region]
 
@@ -108,17 +115,22 @@ def postprocess_segmentation_labels(
         scores = mask.astype(np.float32)
 
     mask = scores >= smoothing_threshold
-    smoothing_fallback = not mask.any()
+    smoothing_fallback = not bool(mask.any().item())
     if smoothing_fallback:
         mask = mask_before_smoothing
 
     mask, _ = largest_component(mask)
+
+    # Wait for GPU work and download the final mask before saving.
+    mask = cp.asnumpy(mask, blocking=True)
 
     processed_labels[region] = np.where(mask, class_id, 0)
 
     voxels_after = int(mask.sum())
     report = [{
         "class_id": int(class_id),
+        "backend": "cupy",
+        "device": f"cuda:{device_id}",
         "voxels_before": original_voxels,
         "components_before": int(components_before),
         "components_after_closing": int(components_after_closing),

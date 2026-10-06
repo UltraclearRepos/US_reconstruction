@@ -1,4 +1,0 @@
-SimpleCRF
-spectralnet
-sewar
-torchsummary

@@ -99,23 +99,6 @@ models/
 *.mov
 
 # =========================
-# External repository heavy data
-# Keep code, ignore datasets/results inside external repo
-# =========================
-external/UnsupervisedSegmentor4Ultrasound/data/
-external/UnsupervisedSegmentor4Ultrasound/deep-spectral-segmentation/DATASET1/
-external/UnsupervisedSegmentor4Ultrasound/deep-spectral-segmentation/wandb/
-external/UnsupervisedSegmentor4Ultrasound/deep-spectral-segmentation/outputs/
-external/UnsupervisedSegmentor4Ultrasound/deep-spectral-segmentation/results/
-external/UnsupervisedSegmentor4Ultrasound/deep-spectral-segmentation/checkpoints/
-external/UnsupervisedSegmentor4Ultrasound/deep-spectral-segmentation/weights/
-external/UnsupervisedSegmentor4Ultrasound/deep-spectral-segmentation/dino2_models/
-
-# If external repo has its own virtual envs/caches
-external/**/__pycache__/
-external/**/.ipynb_checkpoints/
-
-# =========================
 # System / IDE files
 # =========================
 .DS_Store

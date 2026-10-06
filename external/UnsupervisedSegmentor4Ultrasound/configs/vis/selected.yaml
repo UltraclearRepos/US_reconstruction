@@ -1,6 +1,0 @@
-segmaps: true
-eigen: false
-crf_segmaps: true
-multiregion_segmaps: false
-crf_multi_region: false
-dino_attn_maps: false

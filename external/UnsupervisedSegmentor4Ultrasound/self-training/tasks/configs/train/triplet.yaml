@@ -1,8 +1,0 @@
-backbone: resnet
-pretrained_weights: False
-optimizer: Adam
-lr: 1e-3
-epochs: 10
-seed: 1
-triplet_loss_margin: 2
-fraction_layers_to_freeze: 0.0

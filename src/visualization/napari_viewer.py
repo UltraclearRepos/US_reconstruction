@@ -1,3 +1,5 @@
+import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -43,6 +45,14 @@ def visualize_case_napari(
     intensity_methods=("voxel_nearest",),
     segmentation_method="voxel_nearest",
 ):
+    # Match Qt and PyOpenGL backends before either initializes on Linux/Wayland.
+    if sys.platform == "linux" and (
+        os.environ.get("WAYLAND_DISPLAY")
+        or os.environ.get("XDG_SESSION_TYPE") == "wayland"
+    ):
+        os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+        os.environ.setdefault("PYOPENGL_PLATFORM", "glx")
+
     import napari
 
     log_io(
