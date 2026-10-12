@@ -25,15 +25,52 @@ data/
 │   └── labels.npz
 └── surfaces/
     ├── ground_truth/<case>/
-    └── predicted/<case>/<model>/voxel_nearest/
+    ├── predicted/<case>/<model>/voxel_nearest/
+    └── aligned/<case>/<model>/voxel_nearest/
 
-reports/evaluation/{intensity,segmentation,no_reference}/
 models/segmentation/
 ```
 
 Every sweep-like H5 contains frames or labels with shape `(N,H,W)`, probe
 poses `(N,4,4)`, and pixel spacing. Each stage writes one canonical artifact;
 NPZ and per-class H5 copies are not created.
+
+Newly extracted reconstruction surface NPZ files also contain `mesh_to_mapping`,
+a homogeneous 4x4 matrix mapping local mesh XYZ millimetres to the coordinate
+frame of the reconstruction poses (the mapping reference, if poses are relative
+to its last frame). Apply it with column vectors:
+`p_mapping = mesh_to_mapping @ [x, y, z, 1]`.
+Its rotation is identity and its translation is
+`origin_xyz + 0.5 * voxel_size[::-1]`, accounting for voxel centres and ZYX
+volume spacing. Existing `verts`, faces, normals, OBJ coordinates and evaluation
+remain local and unchanged. The field is omitted for inputs without
+`origin_xyz`, including current GT files, whose relationship to tracking is
+unknown. Re-extract existing surfaces to add the field; reconstruction does
+not need to be rerun. GT alignment transforms are separate from this mapping.
+
+## Tracking replay video
+
+Set `CASE_NAME` and the video settings at the top of
+`src/visualization/tracking_video.py`, then create an MP4 from an existing
+predicted surface and prepared sweep:
+
+```bash
+.venv/bin/python -m src.visualization.tracking_video
+```
+
+The video shows one opaque exterior surface, as in a 3D surface viewer. The
+whole mesh moves and rotates relative to the probe using its inverse pose;
+the orthographic camera stays fixed throughout the animation. It smoothly
+replays recorded translations and rotations forward and backward, using
+spherical rotation interpolation. Both poses and mesh are rebased to the last
+recorded frame. No reconstruction or GT alignment is run.
+Legacy meshes without `mesh_to_mapping` recover it from the reconstruction NPZ.
+Output: `outputs/tracking/<case>_tracking_surface.mp4` and a PNG preview.
+Settings include `DURATION_SECONDS`, `FPS`, `WIDTH`, `HEIGHT`, `MODEL_NAME`,
+`RECONSTRUCTION_METHOD`, `CLASS_ID`, and optional `SURFACE_PATH`, `SWEEP_PATH`,
+`VOLUME_PATH`, `OUTPUT_PATH` (use `Path("...")`; `None` selects canonical case
+paths). The default output is relative to the project root. Rendering uses VTK;
+MP4 encoding requires an `ffmpeg` executable with `libx264` on PATH.
 
 ## Running the pipeline
 
@@ -54,7 +91,7 @@ RUN_EXTRACT_SEGMENTATION_SURFACES = True
 ```
 
 Every enabled pipeline stage prints `[TIME] <stage>: START` and its elapsed
-wall-clock seconds on completion. Evaluation branches are timed separately;
+wall-clock seconds on completion. Surface alignment is timed separately;
 segmentation postprocessing is timed as one complete operation inside
 segmentation reconstruction. `PIPELINE TOTAL` includes all enabled stages.
 A failing or interrupted stage prints `FAILED` with its elapsed time and
@@ -74,7 +111,7 @@ SEGMENTATION_RESULT_MODELS = [SEGMENTATION_MODEL_NAME]
 
 Segmentation runs the local U-Net with `SEGMENTATION_CHECKPOINT` and writes
 `data/segmented/<case>/<model>/labels.h5`. Reconstruction, surface extraction,
-visualization and evaluation read this artifact. The pipeline does not require
+and visualization read this artifact. The pipeline does not require
 an external segmentation tool.
 
 Multiclass segmentation uses `voxel_nearest` reconstruction. Averaging methods
@@ -140,7 +177,7 @@ maximum gap distance: the result also depends on fragment geometry. Increase
 the radius cautiously if real parts remain disconnected. Spacing is handled
 in physical units, including anisotropic voxels.
 
-Postprocessing changes the saved labels used by surfaces, viewing and metrics.
+Postprocessing changes the saved labels used by surfaces and viewing.
 Intensity and ground truth are unaffected. Reconstruction `weights` still
 describe the original sampling support, not smoothing confidence. The NPZ
 includes processing parameters and per-class counts in the JSON string
@@ -164,11 +201,125 @@ This pairs Qt's X11 context with PyOpenGL's GLX backend to avoid
 Explicit environment overrides are preserved.
 See the [Napari workaround](https://github.com/napari/napari/pull/9009).
 
+Before either viewer initializes Qt on Linux, the pipeline sets the current
+user-owned `XDG_RUNTIME_DIR` permissions to `0700`, as required by Qt, to avoid
+the `QStandardPaths: wrong permissions on runtime directory` warning. If the
+variable is unset, an existing `/run/user/<uid>` directory is used. Missing,
+foreign-owned or symlink directories are left unchanged.
+
 If activating a moved virtual environment still loads packages from
 `~/.local`, check that `VIRTUAL_ENV` in `.venv/bin/activate` points to the
 current project directory. Reactivate it after correcting the path, or use
 `.venv/bin/python` directly. Use `.venv/bin/python -m pip` for package installation.
 
-Evaluation is terminal output, not input data, and is written under
-`reports/evaluation`. Ground truth is prepared only from separately supplied
-DICOM Volume and Segmentation files; it is never generated by a model.
+## Surface alignment with GT
+
+`src/registration/align_surfaces.py` provides rigid alignment for visualization and evaluation. It reads the
+existing GT and predicted `class_1_surface.npz` meshes and attempts a rigid
+alignment using area-weighted surface sampling, 24 PCA axis orientations,
+unchanged and translation-only starts, and coarse/fine bidirectional ICP.
+It uses NumPy and SciPy already in the project. It estimates only rotation and
+translation, without scaling, reflection, deformation or volume resizing.
+This is a geometric alignment attempt: symmetric or different shapes can
+produce an incorrect anatomical match even when the distance is small.
+
+Run it without rerunning preparation, segmentation or reconstruction:
+
+```bash
+.venv/bin/python -m src.registration.align_surfaces --case 003_01
+```
+
+Optional controls are `--class-id 1`, `--model unet`,
+`--method voxel_nearest`, `--samples 8000`, and `--overlap 0.9`.
+Overlap is the nearest correspondence fraction retained **in each direction**
+during ICP and candidate scoring; it is not an estimate of acquisition coverage.
+`--overlap 1` uses all correspondences. For a very incomplete reconstruction,
+the symmetric objective and PCA initialization may still fail.
+`--no-view` computes and saves the alignment without opening Napari.
+
+The script prints the before/after symmetric mean nearest-neighbour distance
+between sampled surfaces in mm as a diagnostic, not a validated evaluation
+score. It saves the full aligned mesh and `transform_xyz` in
+`data/surfaces/aligned/<case>/<model>/<method>/class_1_surface.npz`.
+The homogeneous matrix maps the original predicted mesh's XYZ coordinates
+to the GT mesh's XYZ coordinates. Both inputs retain their original files.
+Existing meshes use local physical coordinates, so this estimates shape
+alignment rather than recovering DICOM/world registration.
+
+Napari displays GT in green and the aligned reconstruction in magenta.
+The cyan reconstruction before alignment is initially hidden; toggle it in
+the layer list to compare. Mesh XYZ coordinates are converted to Napari ZYX.
+
+In `main.py`, `RUN_ALIGN_SURFACES = True` performs this step after surface
+extraction, using `VIS_CASE` or the first selected case and the first selected
+segmentation model. It opens the alignment viewer instead of the ordinary
+`RUN_NAPARI_VIS` viewer. Set it to `False` to return to ordinary visualization.
+
+Ground truth is prepared only from separately supplied DICOM Volume and
+Segmentation files; it is never generated by a model.
+
+## Evaluation after alignment
+
+The two independent switches immediately after `RUN_SIMPLE_VIS` in `main.py` are:
+
+```python
+RUN_EVAL_SURFACE = True
+RUN_EVAL_VOLUME = True
+```
+
+Both stages run **after all visualization windows close**, for every selected
+case and segmentation model. Each evaluator always calls
+`src.registration.align_surfaces.compute_case_alignment` on the original meshes. It does not
+read or reuse a previously saved alignment, transform or metrics report,
+including the result from visualization or the other evaluator.
+`RUN_ALIGN_SURFACES` controls the alignment viewer and is not required for metrics.
+Class selection is `EVAL_CLASS_ID` in `config.py` (default 1).
+
+Run either evaluator independently, without GUI or reconstruction:
+
+```bash
+.venv/bin/python -m src.evaluation.evaluate_surface --case 003_01
+.venv/bin/python -m src.evaluation.evaluate_volume --case 003_01
+```
+
+`src/evaluation/evaluate_surface.py` evaluates **every vertex of both meshes**,
+without random sampling or trimming. VTK finds the exact nearest point on the
+opposite mesh's complete triangle surface, rather than its vertices.
+Every triangle contributes one third of its area to each of its three vertices;
+these weights prevent densely tessellated areas from dominating mean distances,
+percentiles and Surface Dice. Reports include evaluated vertex and triangle
+counts. VTK is an explicit requirement in `requirements.txt`.
+The reported metrics are both directional mean distances, area-weighted ASSD
+and RMSE, HD95 (maximum of the two area-weighted directional percentiles),
+maximum vertex-to-mesh distance (`vertex_hausdorff_mm`), area-weighted Surface
+Dice and surface area errors. All mesh vertices are used, but the statistics
+remain a discrete approximation to integrals over continuous triangle interiors;
+the maximum is over vertices, not a continuous Hausdorff maximum.
+`EVAL_SURFACE_SAMPLES` and the evaluation `--samples` option have been removed.
+`EVAL_SURFACE_TOLERANCE_MM` or `--tolerance-mm` controls Surface Dice tolerance.
+Alignment still uses its own sampled point clouds and trimmed ICP; evaluation
+always runs on the full meshes after the fresh transform is computed.
+
+`src/evaluation/evaluate_volume.py` applies the newly computed transform to the original
+segmentation mask, using the inverse XYZ-to-ZYX mapping and each volume's
+physical spacing. It uses nearest-neighbour sampling onto the GT lattice,
+extended to the union of both objects so that prediction outside GT is still
+counted as false positives. Background outside the GT array is zero.
+Foreground bounding boxes and slabs avoid allocating a full transformed
+volume. `EVAL_VOLUME_CHUNK_DEPTH` or `--chunk-depth` controls slab depth.
+It reports Dice, IoU, precision, recall, TP/FP/FN counts and physical FP/FN
+volumes. Native physical volume errors use each mask's own voxel volume;
+resampled volume and the change introduced by resampling are reported separately.
+
+Both CLIs also accept `--class-id`, `--model`, `--method`,
+`--alignment-samples` and `--overlap`. Reports include the fresh transform and
+parameter definitions and are saved as:
+
+```text
+reports/evaluation/surface/<case>/<model>/<method>/class_1_metrics.json
+reports/evaluation/volume/<case>/<model>/<method>/class_1_metrics.json
+```
+
+These scores assess shape agreement after rigid registration. Coordinates use
+the local `index*spacing` convention of existing mesh extraction. Applying
+the NPZ world origins in addition to that transform would misalign the masks.

@@ -8,6 +8,7 @@ from config import (
     INTENSITY_RECONSTRUCTION_METHODS,
     SEGMENTATION_RECONSTRUCTION_METHOD,
     SEGMENTATION_MODEL_NAME,
+    EVAL_CLASS_ID,
 )
 
 from src.utils.logging import timed_stage
@@ -26,13 +27,11 @@ RUN_SEGMENTATION = True
 RUN_RECONSTRUCT_INTENSITY = True
 RUN_RECONSTRUCT_SEGMENTATION = True
 RUN_EXTRACT_SEGMENTATION_SURFACES = True
-RUN_EVALUATION = False
+RUN_ALIGN_SURFACES = True
 RUN_NAPARI_VIS = True
 RUN_SIMPLE_VIS = False
-
-RUN_EVAL_RECONSTRUCTION_WITH_GT = True
-RUN_EVAL_SEGMENTATION = True
-RUN_EVAL_NO_REFERENCE = True
+RUN_EVAL_SURFACE = False
+RUN_EVAL_VOLUME = True
 
 VIS_CASE = None
 
@@ -85,37 +84,16 @@ def main():
                         SEGMENTATION_RECONSTRUCTION_METHOD,
                     )
 
-        if RUN_EVALUATION:
-            with timed_stage("EVALUATION TOTAL"):
-                if RUN_EVAL_RECONSTRUCTION_WITH_GT:
-                    with timed_stage("EVALUATION INTENSITY WITH GT"):
-                        from src.evaluation.reconstruction_with_gt import (
-                            evaluate_reconstruction_cases_with_gt,
-                        )
-                        evaluate_reconstruction_cases_with_gt(
-                            cases, methods=INTENSITY_RECONSTRUCTION_METHODS
-                        )
-
-                if RUN_EVAL_SEGMENTATION:
-                    with timed_stage("EVALUATION SEGMENTATION"):
-                        from src.evaluation.segmentation_metrics import evaluate_segmentation_cases
-                        for model_name in SEGMENTATION_RESULT_MODELS:
-                            evaluate_segmentation_cases(
-                                cases,
-                                model_name,
-                                SEGMENTATION_RECONSTRUCTION_METHOD,
-                            )
-
-                if RUN_EVAL_NO_REFERENCE:
-                    with timed_stage("EVALUATION NO REFERENCE"):
-                        from src.evaluation.no_reference import evaluate_no_reference_cases
-                        evaluate_no_reference_cases(
-                            cases, methods=INTENSITY_RECONSTRUCTION_METHODS
-                        )
-
         case_for_vis = VIS_CASE or cases[0]
         model_for_vis = SEGMENTATION_RESULT_MODELS[0]
-        if RUN_NAPARI_VIS:
+        if RUN_ALIGN_SURFACES:
+            from src.registration.align_surfaces import align_and_view_case
+            align_and_view_case(
+                case_for_vis,
+                model_for_vis,
+                SEGMENTATION_RECONSTRUCTION_METHOD,
+            )
+        elif RUN_NAPARI_VIS:
             from src.visualization.napari_viewer import visualize_case_napari
             visualize_case_napari(
                 case_for_vis,
@@ -131,6 +109,26 @@ def main():
                 INTENSITY_RECONSTRUCTION_METHODS[0],
                 SEGMENTATION_RECONSTRUCTION_METHOD,
             )
+
+        if RUN_EVAL_SURFACE:
+            with timed_stage("EVALUATE SURFACES"):
+                from src.evaluation.evaluate_surface import evaluate_surface_case
+                for case_name in cases:
+                    for model_name in SEGMENTATION_RESULT_MODELS:
+                        evaluate_surface_case(
+                            case_name, model_name, SEGMENTATION_RECONSTRUCTION_METHOD,
+                            class_id=EVAL_CLASS_ID,
+                        )
+
+        if RUN_EVAL_VOLUME:
+            with timed_stage("EVALUATE VOLUMES"):
+                from src.evaluation.evaluate_volume import evaluate_volume_case
+                for case_name in cases:
+                    for model_name in SEGMENTATION_RESULT_MODELS:
+                        evaluate_volume_case(
+                            case_name, model_name, SEGMENTATION_RECONSTRUCTION_METHOD,
+                            class_id=EVAL_CLASS_ID,
+                        )
 
 
 if __name__ == "__main__":

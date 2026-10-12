@@ -1,4 +1,4 @@
-"""Volume loading shared by viewers and evaluation."""
+"""Volume loading shared by viewers."""
 
 from pathlib import Path
 

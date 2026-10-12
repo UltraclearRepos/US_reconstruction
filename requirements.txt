@@ -1,5 +1,6 @@
 numpy
 scipy
+vtk>=9.2,<10
 h5py
 pydicom
 torch
@@ -8,5 +9,4 @@ pyqt5
 scikit-image
 matplotlib
 pillow
-sewar
 cupy-cuda12x>=14.0,<15.0

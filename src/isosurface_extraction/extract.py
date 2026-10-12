@@ -27,6 +27,27 @@ def load_labels(path):
     return np.rint(labels).astype(np.uint16), spacing_zyx
 
 
+def load_mesh_to_mapping(path, spacing_zyx):
+    """Map local mesh XYZ mm to the frame used by reconstruction poses.
+
+    Reconstruction samples voxel centres at origin + (index + 0.5)*spacing,
+    while marching cubes returns local index*spacing coordinates. Inputs
+    without origin_xyz (including current GT files) have no mapping transform.
+    """
+    with np.load(path, allow_pickle=False) as data:
+        if "origin_xyz" not in data:
+            return None
+        origin_xyz = np.asarray(data["origin_xyz"], dtype=np.float64)
+    spacing_xyz = np.asarray(spacing_zyx, dtype=np.float64)[::-1]
+    if (origin_xyz.shape != (3,) or not np.isfinite(origin_xyz).all()
+            or spacing_xyz.shape != (3,) or not np.isfinite(spacing_xyz).all()
+            or np.any(spacing_xyz <= 0)):
+        raise ValueError("Mapping requires a finite XYZ origin and positive ZYX spacing.")
+    transform = np.eye(4, dtype=np.float64)
+    transform[:3, 3] = origin_xyz + 0.5 * spacing_xyz
+    return transform
+
+
 def save_obj(path, vertices, faces):
     with open(path, "w", encoding="utf-8") as handle:
         for vertex in vertices:
@@ -39,6 +60,8 @@ def extract_surfaces_from_labels(labels_path, output_dir, classes=None):
     labels_path = Path(labels_path)
     output_dir = Path(output_dir)
     labels, spacing_zyx = load_labels(labels_path)
+    mesh_to_mapping = load_mesh_to_mapping(labels_path, spacing_zyx)
+    surface_metadata = {} if mesh_to_mapping is None else {"mesh_to_mapping": mesh_to_mapping}
     selected = classes or [int(x) for x in np.unique(labels) if int(x) != 0]
     output_dir.mkdir(parents=True, exist_ok=True)
     log_io("ISOSURFACE", {"labels 3D": labels_path}, {"surfaces": output_dir})
@@ -66,6 +89,7 @@ def extract_surfaces_from_labels(labels_path, output_dir, classes=None):
             values=values.astype(np.float32),
             class_id=np.int32(class_id),
             source_file=np.array(str(labels_path)),
+            **surface_metadata,
         )
         if ISO_SAVE_OBJ:
             save_obj(output.with_suffix(".obj"), vertices, faces)

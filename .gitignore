@@ -28,6 +28,7 @@ conda/
 # Main project data - DO NOT COMMIT
 # =========================
 data/
+reports/
 
 # =========================
 # Outputs / results / experiments

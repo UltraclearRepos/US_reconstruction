@@ -1,5 +1,3 @@
-import matplotlib.pyplot as plt
-
 from src.utils.paths import (
     ground_truth_labels_path,
     ground_truth_volume_path,
@@ -7,6 +5,7 @@ from src.utils.paths import (
     segmentation_reconstruction_path,
 )
 from src.visualization.common import load_volume
+from src.visualization.qt_environment import prepare_qt_environment
 from src.utils.logging import log_io
 
 
@@ -16,6 +15,9 @@ def visualize_case_simple(
     intensity_method="voxel_nearest",
     segmentation_method="voxel_nearest",
 ):
+    prepare_qt_environment()
+    import matplotlib.pyplot as plt
+
     paths = [
         ("intensity reconstruction", intensity_reconstruction_path(
             case_name, intensity_method

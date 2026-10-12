@@ -1,5 +1,3 @@
-import os
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -21,11 +19,12 @@ from src.utils.paths import (
     segmentation_reconstruction_path,
 )
 from src.visualization.common import load_volume
+from src.visualization.qt_environment import prepare_qt_environment
 from src.utils.logging import log_io
 
 
 # Display-only offset in viewer coordinates; does not affect saved data or metrics.
-GT_SHIFT = (40, 20, 0)
+GT_SHIFT = (0, 0, 0)
 
 
 def add_surface(viewer, path, translate=(0, 0, 0)):
@@ -45,13 +44,7 @@ def visualize_case_napari(
     intensity_methods=("voxel_nearest",),
     segmentation_method="voxel_nearest",
 ):
-    # Match Qt and PyOpenGL backends before either initializes on Linux/Wayland.
-    if sys.platform == "linux" and (
-        os.environ.get("WAYLAND_DISPLAY")
-        or os.environ.get("XDG_SESSION_TYPE") == "wayland"
-    ):
-        os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
-        os.environ.setdefault("PYOPENGL_PLATFORM", "glx")
+    prepare_qt_environment()
 
     import napari
 
