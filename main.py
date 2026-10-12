@@ -18,17 +18,21 @@ from src.utils.logging import timed_stage
 # WHAT TO RUN
 # ============================================================
 
-CASE_NAMES = ["001_01"]
+CASE_NAMES = ["008_02"]
 
 SEGMENTATION_RESULT_MODELS = [SEGMENTATION_MODEL_NAME]
+
+# GT import during RUN_PREPARE_DATA: True = source-frame/segment mapping;
+# False = original raw SEG frame stack. Re-extract surfaces after changing it.
+USE_NEW_GT_LOADER = True
 
 RUN_PREPARE_DATA = True
 RUN_SEGMENTATION = True
 RUN_RECONSTRUCT_INTENSITY = True
 RUN_RECONSTRUCT_SEGMENTATION = True
 RUN_EXTRACT_SEGMENTATION_SURFACES = True
-RUN_ALIGN_SURFACES = True
-RUN_NAPARI_VIS = True
+RUN_ALIGN_SURFACES = False
+RUN_NAPARI_VIS = False
 RUN_SIMPLE_VIS = False
 RUN_EVAL_SURFACE = False
 RUN_EVAL_VOLUME = True
@@ -44,7 +48,7 @@ def main():
         if RUN_PREPARE_DATA:
             with timed_stage("PREPARE DATA"):
                 from src.data_loading.prepare_dicom import prepare_cases
-                prepare_cases(cases)
+                prepare_cases(cases, use_new_gt_loader=USE_NEW_GT_LOADER)
 
         if RUN_SEGMENTATION:
             with timed_stage("SEGMENTATION"):

@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+import re
 
 import numpy as np
 from skimage.measure import marching_cubes
@@ -101,6 +102,14 @@ def extract_surfaces_from_labels(labels_path, output_dir, classes=None):
                 "faces": int(len(faces)),
             }
         )
+
+    # Do not leave nodule surfaces from a previous import when switching to
+    # the old loader, whose output has only one non-background label.
+    generated = {item["surface"] for item in summary}
+    for path in output_dir.glob("class_*_surface.npz"):
+        if re.fullmatch(r"class_\d+_surface\.npz", path.name) and path.name not in generated:
+            path.unlink()
+            path.with_suffix(".obj").unlink(missing_ok=True)
 
     with open(output_dir / "summary.json", "w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2)

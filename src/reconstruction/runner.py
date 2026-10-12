@@ -37,6 +37,7 @@ from src.reconstruction.vnn import (
 )
 from src.reconstruction.vnn_distance_weighted import reconstruct_distance_weighted_for_file
 from src.reconstruction.vnn_mean import reconstruct_voxel_nearest_mean_for_file
+from src.reconstruction.voxel_size import resolve_voxel_size
 from src.utils.paths import (
     intensity_reconstruction_dir,
     prepared_sweep_path,
@@ -62,12 +63,12 @@ def normalize_list(values):
     return list(values)
 
 
-def reconstruct_file_with_method(path, out_dir, method):
+def reconstruct_file_with_method(path, out_dir, method, voxel=VOXEL_SIZE):
     fn = METHODS[method]
     common = dict(
         path=path,
         out_root=out_dir,
-        voxel=VOXEL_SIZE,
+        voxel=voxel,
         pixel_spacing=PIXEL_SPACING,
         background_threshold=BACKGROUND_THRESHOLD,
         center=CENTER,
@@ -100,6 +101,7 @@ def reconstruct_intensity_case(
     methods=None,
 ):
     input_h5 = prepared_sweep_path(case_name)
+    voxel = resolve_voxel_size(case_name, VOXEL_SIZE)
     outputs = []
     for method in normalize_list(methods or INTENSITY_RECONSTRUCTION_METHODS):
         out_dir = intensity_reconstruction_dir(case_name, method)
@@ -109,7 +111,7 @@ def reconstruct_intensity_case(
             {"sweep": input_h5},
             {"volume": out_dir / "volume.npz"},
         )
-        reconstruct_file_with_method(input_h5, out_dir, method)
+        reconstruct_file_with_method(input_h5, out_dir, method, voxel=voxel)
         generated_npz = out_dir / f"{input_h5.stem}.npz"
         output_npz = out_dir / "volume.npz"
         generated_npz.replace(output_npz)
@@ -125,6 +127,7 @@ def reconstruct_segmentation_case(
     if method != "voxel_nearest":
         raise ValueError("Multiclass labels must use method='voxel_nearest'")
 
+    voxel = resolve_voxel_size(case_name, VOXEL_SIZE)
     input_h5 = segmentation_path(case_name, model_name)
     out_dir = segmentation_reconstruction_dir(case_name, model_name, method)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -143,7 +146,7 @@ def reconstruct_segmentation_case(
         sx=sx,
         sy=sy,
         origin=None,
-        voxel=VOXEL_SIZE,
+        voxel=voxel,
         background_threshold=None,
         center=CENTER,
         chunk_pixels=CHUNK_PIXELS,

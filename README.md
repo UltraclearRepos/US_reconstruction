@@ -35,6 +35,35 @@ Every sweep-like H5 contains frames or labels with shape `(N,H,W)`, probe
 poses `(N,4,4)`, and pixel spacing. Each stage writes one canonical artifact;
 NPZ and per-class H5 copies are not created.
 
+GT DICOM SEG import reads each frame's `ReferencedSegmentNumber` and
+`ReferencedFrameNumber`, preserving segment IDs on the referenced source-volume
+grid. Interleaved thyroid and nodule frames become one label volume with the
+source depth, not a doubled Z stack. For the current files, 0 is background,
+1 is thyroid and 2 is nodule. Where masks overlap, the higher segment ID wins,
+so nodule voxels remain 2; the whole thyroid including nodules is the union of
+labels 1 and 2. Fractional masks are thresholded at half `MaximumFractionalValue`.
+Source dimensions, spacing, UID and frame numbers are checked; incompatible
+geometry raises an error rather than being resampled. The SEG file must reference
+one source volume with an explicit source frame number for each mask frame.
+Re-run preparation and GT surface extraction to refresh existing artifacts.
+Previously generated alignment and evaluation reports need to be recomputed.
+
+`USE_NEW_GT_LOADER` in `main.py` chooses the GT segmentation importer:
+`True` uses the corrected source-frame/segment mapping (default); `False`
+reproduces the original raw frame stack with its original pixel values.
+The choice is applied during `RUN_PREPARE_DATA`, not when opening existing NPZ
+files. Enable `RUN_PREPARE_DATA` and `RUN_EXTRACT_SEGMENTATION_SURFACES` to update
+GT labels and meshes after switching. Surface extraction removes obsolete
+generated class meshes, so old nodule surfaces do not remain in the viewer.
+
+To compare the original and corrected GT imports directly from the same DICOM,
+run `.venv/bin/python compare_gt_loaders.py` without command-line arguments.
+Set `CASE_NAME` at the top of that standalone script (default `003_02`).
+Napari shows BEFORE on the left and AFTER on the right at the same physical
+scale. It displays only surfaces and releases the complete label volumes before
+opening the viewer. Software rendering is enabled for this comparison
+to avoid the observed WSL D3D12 driver crash. No pipeline data is overwritten.
+
 Newly extracted reconstruction surface NPZ files also contain `mesh_to_mapping`,
 a homogeneous 4x4 matrix mapping local mesh XYZ millimetres to the coordinate
 frame of the reconstruction poses (the mapping reference, if poses are relative
@@ -117,6 +146,16 @@ an external segmentation tool.
 Multiclass segmentation uses `voxel_nearest` reconstruction. Averaging methods
 are reserved for intensity because averaging class IDs would create invalid
 labels.
+
+`VOXEL_SIZE` in `config.py` specifies reconstruction spacing in XYZ order, in mm.
+Set it to `None` to use each case's GT spacing for both intensity and segmentation
+reconstruction, for all configured intensity methods. The pipeline reads only
+`voxel_size` metadata from `data/ground_truth/<case>/labels.npz`, falling back to
+`volume.npz` if the labels file is absent, and converts its ZYX spacing to XYZ.
+Missing GT or missing, nonfinite, nonpositive or incorrectly shaped spacing raises
+an explicit error. A manually configured tuple continues to work without GT.
+This selects voxel spacing; array dimensions and origin still come from the sweep.
+Rerun reconstruction and surface extraction to apply a new spacing to saved data.
 
 `RECONSTRUCTION_MAX_PLANE_DISTANCE_MM` in `config.py` limits the perpendicular
 distance from a voxel centre to a frame plane for **all reconstruction methods**,

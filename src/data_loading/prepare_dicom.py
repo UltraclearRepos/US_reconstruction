@@ -13,6 +13,10 @@ from config import (
     IMAGE_DATASET_NAME,
 )
 from src.data_loading.sweep import save_sweep_h5
+from src.data_loading.dicom_segmentation import (
+    extract_volume_spacing_zyx,
+    load_segmentation_labels,
+)
 from src.utils.logging import log_io
 from src.utils.paths import (
     ground_truth_labels_path,
@@ -81,13 +85,6 @@ def extract_sweep_spacing_xy(ds):
     return sx, sy
 
 
-def extract_volume_spacing_zyx(ds):
-    pixel_measures = ds.SharedFunctionalGroupsSequence[0].PixelMeasuresSequence[0]
-    sy, sx = (float(value) for value in pixel_measures.PixelSpacing)
-    sz = float(pixel_measures.SliceThickness)
-    return sz, sy, sx
-
-
 def decode_od_to_float64(raw_value):
     if isinstance(raw_value, bytes) and len(raw_value) % 8 == 0:
         return np.frombuffer(raw_value, dtype=np.float64)
@@ -124,7 +121,7 @@ def save_npz_volume(out_npz, vol_zyx, voxel_size_zyx, origin_zyx=None):
     )
 
 
-def prepare_case(case_dir):
+def prepare_case(case_dir, use_new_gt_loader=True):
     case_dir = Path(case_dir)
     case_name = case_dir.name
 
@@ -177,19 +174,31 @@ def prepare_case(case_dir):
         save_npz_volume(out_volume_npz, vol_zyx, voxel_size_zyx)
 
     if seg_dcm is not None:
-        ds_seg = pydicom.dcmread(str(seg_dcm))
-        seg_zyx = ensure_zyx(to_numpy_pixel_array(ds_seg))
-        if np.issubdtype(seg_zyx.dtype, np.floating):
-            seg_zyx = np.rint(seg_zyx)
-        seg_zyx = seg_zyx.astype(np.uint16)
-        voxel_size_zyx = extract_volume_spacing_zyx(ds_seg)
+        if use_new_gt_loader:
+            reference_volume = (
+                pydicom.dcmread(str(volume_dcm), stop_before_pixels=True)
+                if volume_dcm is not None else None
+            )
+            seg_zyx, voxel_size_zyx = load_segmentation_labels(seg_dcm, reference_volume)
+        else:
+            # Original GT loader: retain every SEG frame as a separate Z slice.
+            ds_seg = pydicom.dcmread(str(seg_dcm))
+            seg_zyx = ensure_zyx(to_numpy_pixel_array(ds_seg))
+            if np.issubdtype(seg_zyx.dtype, np.floating):
+                seg_zyx = np.rint(seg_zyx)
+            seg_zyx = seg_zyx.astype(np.uint16)
+            voxel_size_zyx = extract_volume_spacing_zyx(ds_seg)
+        print(
+            f"[GT IMPORT] {case_name}: loader={'new' if use_new_gt_loader else 'old'}, "
+            f"shape ZYX={seg_zyx.shape}"
+        )
         save_npz_volume(out_seg_labels_npz, seg_zyx, voxel_size_zyx)
 
     print(f"[OK] Prepared case: {case_name}")
     return out_h5
 
 
-def prepare_cases(case_names=None):
+def prepare_cases(case_names=None, use_new_gt_loader=True):
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     case_dirs = sorted([p for p in RAW_DIR.iterdir() if p.is_dir()])
     if case_names is not None:
@@ -201,7 +210,7 @@ def prepare_cases(case_names=None):
 
     outputs = []
     for case_dir in case_dirs:
-        output = prepare_case(case_dir)
+        output = prepare_case(case_dir, use_new_gt_loader=use_new_gt_loader)
         if output is not None:
             outputs.append(output)
     return outputs

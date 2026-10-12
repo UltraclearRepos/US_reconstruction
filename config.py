@@ -40,6 +40,7 @@ SEGMENTATION_RECONSTRUCTION_METHOD = "voxel_nearest"
 # Maximum perpendicular voxel-to-frame distance in mm; None disables the limit.
 # Initial value to tune against acquisition spacing. Applies to all methods.
 RECONSTRUCTION_MAX_PLANE_DISTANCE_MM = 1.0
+# XYZ spacing in mm; None reads voxel_size from this case's GT (labels, then volume).
 VOXEL_SIZE = (0.2, 0.2, 0.2)
 PIXEL_SPACING = None
 BACKGROUND_THRESHOLD = 0.0
@@ -76,8 +77,9 @@ ISO_CLASSES = None
 
 
 # Visualization
-SHOW_RECONSTRUCTION = True
-SHOW_GROUND_TRUTH_VOLUME = True
+# Keep Napari focused on segmentation volumes and surfaces to reduce memory use.
+SHOW_RECONSTRUCTION = False
+SHOW_GROUND_TRUTH_VOLUME = False
 SHOW_SEGMENTATION_LABELS = True
 SHOW_SURFACES = True
 NAPARI_NDISPLAY = 3

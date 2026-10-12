@@ -24,7 +24,7 @@ from src.utils.logging import log_io
 
 
 # Display-only offset in viewer coordinates; does not affect saved data or metrics.
-GT_SHIFT = (0, 0, 0)
+GT_SHIFT = (40, 20, 0)
 
 
 def add_surface(viewer, path, translate=(0, 0, 0)):
@@ -52,9 +52,6 @@ def visualize_case_napari(
         "VISUALIZATION napari",
         {
             "case": case_name,
-            "intensity root": intensity_reconstruction_path(
-                case_name, intensity_methods[0]
-            ).parent,
             "segmentation": segmentation_reconstruction_path(
                 case_name, model_name, segmentation_method
             ),
@@ -84,9 +81,9 @@ def visualize_case_napari(
         segmentation_method,
     )
     if SHOW_SEGMENTATION_LABELS and predicted_labels.exists():
-        labels, spacing = load_volume(predicted_labels)
+        labels, spacing = load_volume(predicted_labels, dtype=np.int32)
         viewer.add_labels(
-            labels.astype(np.int32),
+            labels,
             name=f"predicted/{model_name}",
             scale=spacing,
         )
@@ -108,9 +105,9 @@ def visualize_case_napari(
     if SHOW_SEGMENTATION_LABELS:
         path = ground_truth_labels_path(case_name)
         if path.exists():
-            labels, spacing = load_volume(path)
+            labels, spacing = load_volume(path, dtype=np.int32)
             viewer.add_labels(
-                labels.astype(np.int32),
+                labels,
                 name="ground_truth/labels",
                 scale=spacing,
                 translate=GT_SHIFT,
