@@ -27,7 +27,9 @@ IMAGE_DATASET_NAME = "img"
 
 # Segmentation
 SEGMENTATION_MODEL_NAME = "unet"
-SEGMENTATION_CHECKPOINT = SEGMENTATION_MODELS_DIR / "best-epoch=059.ckpt"
+SEGMENTATION_CHECKPOINT = SEGMENTATION_MODELS_DIR / "best-epoch_008=066.ckpt"
+# Select either task or both. Output labels: thyroid=1, nodule=2 (nodule wins overlaps).
+SEGMENTATION_TASKS = ["thyroid", "nodule"]
 SEGMENTATION_IMAGE_KEY = None
 SEGMENTATION_DEVICE = None
 
@@ -64,9 +66,12 @@ DWR_INTERP = "bilinear"
 
 # Postprocessing of reconstructed segmentation only (distances in mm).
 SEGMENTATION_POSTPROCESS_ENABLED = True
+SEGMENTATION_SMOOTHING_THRESHOLD = 0.5
+# Class 1 (thyroid): closing, largest component and smoothing.
 SEGMENTATION_CLOSING_RADIUS_MM = 0.0
 SEGMENTATION_SMOOTHING_SIGMA_MM = 1.0
-SEGMENTATION_SMOOTHING_THRESHOLD = 0.5
+# Class 2 (nodules): Gaussian smoothing of each component, keeping all nodules.
+SEGMENTATION_NODULE_SMOOTHING_SIGMA_MM = 0.4
 
 
 # Isosurfaces
@@ -74,6 +79,16 @@ ISO_MIN_VOXELS = 20
 ISO_STEP_SIZE = 1
 ISO_SAVE_OBJ = True
 ISO_CLASSES = None
+
+
+# Rigid surface alignment (shared by the viewer and both evaluations).
+ALIGN_SAMPLES = 10000  # Points sampled per surface for PCA and fine ICP.
+ALIGN_COARSE_SAMPLES = 3000  # Per surface; capped at ALIGN_SAMPLES.
+ALIGN_COARSE_ITERATIONS = 60  # Maximum iterations per initial orientation.
+ALIGN_FINE_ITERATIONS = 150  # Maximum iterations per shortlisted candidate.
+ALIGN_FINE_CANDIDATES = 4  # Best coarse candidates refined at full sample density.
+ALIGN_OVERLAP = 0.9  # Nearest pair fraction retained separately in each direction.
+ALIGN_RANDOM_SEED = 0  # Fixed seed makes surface sampling repeatable.
 
 
 # Visualization

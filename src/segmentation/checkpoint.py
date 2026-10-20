@@ -78,18 +78,6 @@ def load_checkpoint(checkpoint_path, device):
             "checkpoint.hyper_parameters",
         )
     )
-    class_name_mappings = _required(
-        hyperparameters,
-        "class_name_mappings",
-        "checkpoint.hyper_parameters",
-    )
-    if len(class_name_mappings) != 1:
-        raise ValueError(
-            "Inference expects exactly one segmentation task in "
-            f"class_name_mappings, got: {sorted(class_name_mappings)}"
-        )
-    task_name, class_names = next(iter(class_name_mappings.items()))
-
     model_state = {
         key.removeprefix("model."): value
         for key, value in state_dict.items()
@@ -111,7 +99,5 @@ def load_checkpoint(checkpoint_path, device):
         "image_size": tuple(int(value) for value in image_size),
         "in_channels": in_channels,
         "n_classes": n_classes,
-        "task_name": task_name,
-        "class_names": class_names,
     }
     return model, settings

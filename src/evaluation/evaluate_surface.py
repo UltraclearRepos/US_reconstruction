@@ -5,8 +5,9 @@ import json
 
 import numpy as np
 
-from src.registration.align_surfaces import DEFAULT_OVERLAP, DEFAULT_SAMPLES, compute_case_alignment
+from src.registration.align_surfaces import compute_case_alignment
 from config import (
+    ALIGN_OVERLAP, ALIGN_SAMPLES,
     EVALUATION_DIR, EVAL_CLASS_ID, EVAL_SURFACE_TOLERANCE_MM,
     SEGMENTATION_MODEL_NAME, SEGMENTATION_RECONSTRUCTION_METHOD,
 )
@@ -99,7 +100,7 @@ def evaluate_surface_case(
     case_name, model_name=SEGMENTATION_MODEL_NAME,
     reconstruction_method=SEGMENTATION_RECONSTRUCTION_METHOD, class_id=EVAL_CLASS_ID,
     tolerance_mm=EVAL_SURFACE_TOLERANCE_MM,
-    alignment_samples=DEFAULT_SAMPLES, overlap=DEFAULT_OVERLAP,
+    alignment_samples=ALIGN_SAMPLES, overlap=ALIGN_OVERLAP,
 ):
     # Recompute even when an aligned NPZ or a previous metrics report exists.
     alignment = compute_case_alignment(case_name, model_name, reconstruction_method,
@@ -147,8 +148,8 @@ def main():
     parser.add_argument("--method", default=SEGMENTATION_RECONSTRUCTION_METHOD)
     parser.add_argument("--class-id", type=int, default=EVAL_CLASS_ID)
     parser.add_argument("--tolerance-mm", type=float, default=EVAL_SURFACE_TOLERANCE_MM)
-    parser.add_argument("--alignment-samples", type=int, default=DEFAULT_SAMPLES)
-    parser.add_argument("--overlap", type=float, default=DEFAULT_OVERLAP)
+    parser.add_argument("--alignment-samples", type=int, default=ALIGN_SAMPLES)
+    parser.add_argument("--overlap", type=float, default=ALIGN_OVERLAP)
     args = parser.parse_args()
     evaluate_surface_case(args.case, args.model, args.method, args.class_id,
                           args.tolerance_mm, args.alignment_samples, args.overlap)

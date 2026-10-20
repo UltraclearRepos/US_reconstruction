@@ -7,12 +7,16 @@ from config import (
     SEGMENTATION_DEVICE,
     SEGMENTATION_IMAGE_KEY,
     SEGMENTATION_MODEL_NAME,
+    SEGMENTATION_TASKS,
 )
 from src.data_loading.sweep import load_sweep_h5, save_sweep_h5
 from src.segmentation.checkpoint import load_checkpoint
 from src.segmentation.common import prepare_frame, resize_mask
 from src.utils.logging import log_io
 from src.utils.paths import prepared_sweep_path, segmentation_path
+
+
+TASK_LABELS = {"thyroid": 1, "nodule": 2}
 
 
 MASK_COLORS = np.asarray(
@@ -46,13 +50,15 @@ def load_segmentation_model():
         f"[SEGMENT] image_size={settings['image_size']}, "
         f"in_channels={settings['in_channels']}, "
         f"classes={settings['n_classes']}, "
-        f"task={settings['task_name']}"
+        f"tasks={SEGMENTATION_TASKS}"
     )
     return model, settings, device
 
 
 @torch.inference_mode()
 def predict_masks_for_sequence(frames, model, settings, device, images_dir=None):
+    if not SEGMENTATION_TASKS or any(task not in TASK_LABELS for task in SEGMENTATION_TASKS):
+        raise ValueError('SEGMENTATION_TASKS must select "thyroid", "nodule", or both')
     count, height, width = frames.shape
     masks = np.zeros((count, height, width), dtype=np.uint16)
     if images_dir is not None:
@@ -64,13 +70,17 @@ def predict_masks_for_sequence(frames, model, settings, device, images_dir=None)
         tensor = tensor.repeat(1, settings["in_channels"], 1, 1)
 
         outputs = model(tensor)
-        task_name = settings["task_name"]
-        if task_name not in outputs:
-            raise KeyError(
-                f"Model has no '{task_name}' output; available: {sorted(outputs)}"
-            )
-        prediction = outputs[task_name].argmax(dim=1)[0].cpu().numpy()
-        masks[index] = resize_mask(prediction, (height, width))
+        # Fixed label order gives nodules priority, regardless of config list order.
+        for task_name, class_id in TASK_LABELS.items():
+            if task_name not in SEGMENTATION_TASKS:
+                continue
+            if task_name not in outputs:
+                raise KeyError(
+                    f"Model has no '{task_name}' output; available: {sorted(outputs)}"
+                )
+            prediction = outputs[task_name].argmax(dim=1)[0].cpu().numpy()
+            foreground = resize_mask(prediction, (height, width)) != 0
+            masks[index][foreground] = class_id
 
         if images_dir is not None:
             low, high = np.percentile(frame[np.isfinite(frame)], (1.0, 99.0))
@@ -135,7 +145,7 @@ def segment_case(
             "content_type": "segmentation_labels",
             "model_name": model_name,
             "checkpoint": str(SEGMENTATION_CHECKPOINT),
-            "task": settings["task_name"],
+            "tasks": SEGMENTATION_TASKS,
             "model_input_size": settings["image_size"],
             "classes": classes,
             "source_h5": str(source_h5),

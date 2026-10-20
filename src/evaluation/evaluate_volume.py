@@ -8,8 +8,9 @@ import json
 import numpy as np
 from scipy.ndimage import affine_transform
 
-from src.registration.align_surfaces import DEFAULT_OVERLAP, DEFAULT_SAMPLES, compute_case_alignment, transform_points
+from src.registration.align_surfaces import compute_case_alignment, transform_points
 from config import (
+    ALIGN_OVERLAP, ALIGN_SAMPLES,
     EVALUATION_DIR, EVAL_CLASS_ID, EVAL_VOLUME_CHUNK_DEPTH,
     SEGMENTATION_MODEL_NAME, SEGMENTATION_RECONSTRUCTION_METHOD,
 )
@@ -165,8 +166,8 @@ def volume_metrics(gt, pred, transform_xyz, chunk_depth=EVAL_VOLUME_CHUNK_DEPTH)
 def evaluate_volume_case(
     case_name, model_name=SEGMENTATION_MODEL_NAME,
     reconstruction_method=SEGMENTATION_RECONSTRUCTION_METHOD, class_id=EVAL_CLASS_ID,
-    chunk_depth=EVAL_VOLUME_CHUNK_DEPTH, alignment_samples=DEFAULT_SAMPLES,
-    overlap=DEFAULT_OVERLAP,
+    chunk_depth=EVAL_VOLUME_CHUNK_DEPTH, alignment_samples=ALIGN_SAMPLES,
+    overlap=ALIGN_OVERLAP,
 ):
     # Always recompute from the original meshes, independently of visualization/surface metrics.
     alignment = compute_case_alignment(case_name, model_name, reconstruction_method,
@@ -213,8 +214,8 @@ def main():
     parser.add_argument("--method", default=SEGMENTATION_RECONSTRUCTION_METHOD)
     parser.add_argument("--class-id", type=int, default=EVAL_CLASS_ID)
     parser.add_argument("--chunk-depth", type=int, default=EVAL_VOLUME_CHUNK_DEPTH)
-    parser.add_argument("--alignment-samples", type=int, default=DEFAULT_SAMPLES)
-    parser.add_argument("--overlap", type=float, default=DEFAULT_OVERLAP)
+    parser.add_argument("--alignment-samples", type=int, default=ALIGN_SAMPLES)
+    parser.add_argument("--overlap", type=float, default=ALIGN_OVERLAP)
     args = parser.parse_args()
     evaluate_volume_case(args.case, args.model, args.method, args.class_id,
                          args.chunk_depth, args.alignment_samples, args.overlap)

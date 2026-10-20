@@ -143,6 +143,14 @@ Segmentation runs the local U-Net with `SEGMENTATION_CHECKPOINT` and writes
 and visualization read this artifact. The pipeline does not require
 an external segmentation tool.
 
+`SEGMENTATION_TASKS` in `config.py` selects the model outputs to use:
+`["thyroid"]`, `["nodule"]`, or `["thyroid", "nodule"]` (current default).
+Task selection does not read checkpoint `class_name_mappings`. Saved labels
+always use 0 for background, 1 for thyroid and 2 for nodules, including when
+only nodules are selected. Nodules win overlaps regardless of task list order.
+The H5 `tasks` attribute records the configured list. Rerun segmentation,
+segmentation reconstruction and surface extraction to refresh existing results.
+
 Multiclass segmentation uses `voxel_nearest` reconstruction. Averaging methods
 are reserved for intensity because averaging class IDs would create invalid
 labels.
@@ -174,22 +182,26 @@ The limit applies during reconstruction; the subsequent segmentation closing
 and smoothing may expand labels into voxels without original sampling support.
 
 Reconstructed segmentation is postprocessed before `labels.npz` is saved.
-Postprocessing expects background zero and at most one non-background class;
-multiclass input is rejected and the original foreground class ID is preserved.
-The pipeline closes small gaps with a spherical 3D footprint, retains the
+Postprocessing expects background 0, thyroid 1 and nodules 2. For thyroid,
+the pipeline closes small gaps with a spherical 3D footprint, retains the
 largest 26-connected component, and applies Gaussian smoothing followed by
 thresholding. Another largest-component selection removes fragments split off
-by smoothing. If smoothing would erase the class completely, its cleaned mask
-is retained. An empty input produces an empty output and an empty class report.
+by smoothing. For nodules, each original 26-connected component is smoothed
+independently and thresholded, without closing or largest-component selection.
+The resulting nodule masks are combined; nearby results can touch or merge.
+If smoothing would erase a thyroid mask or an individual nodule completely,
+its mask before smoothing is retained. Nodules take priority over thyroid where
+the processed masks overlap. Reports count the final masks after this priority
+is applied. An empty input produces an empty output and an empty class report.
 
 Segmentation postprocessing uses CuPy and `cupyx.scipy.ndimage` on the
 current CUDA device (GPU 0 by default). It does not change the active device;
 `DEVICE` continues to configure reconstruction.
-The sequence of operations, single working `mask` and Gaussian `scores`
-are unchanged. Input validation, crop preparation and assembly of the saved
-NumPy volume remain on CPU. The cropped mask is uploaded once and the final
-mask is downloaded with synchronization, so the stage timer includes completed
-GPU work and transfers. The console and class report identify the actual GPU;
+Input validation, crop preparation, finding nodule component bounding boxes,
+and assembly of the saved NumPy volume run on CPU. Connected-component labeling,
+morphology and Gaussian smoothing run on GPU. Final masks are downloaded with
+synchronization, so the stage timer includes completed GPU work and transfers.
+The console and class report identify the actual GPU;
 the class report is also saved in the NPZ processing metadata.
 There is one GPU implementation, requiring CuPy and a working CUDA device.
 The first GPU run may include kernel compilation time. Floating-point rounding
@@ -208,13 +220,20 @@ For a different CUDA Toolkit, use the matching wheel from the
 Install only one CuPy wheel variant in an environment.
 
 The controls in `config.py` are `SEGMENTATION_POSTPROCESS_ENABLED` (default
-`True`), `SEGMENTATION_CLOSING_RADIUS_MM` (`0.6` mm),
-`SEGMENTATION_SMOOTHING_SIGMA_MM` (`0.4` mm), and
+`True`), `SEGMENTATION_CLOSING_RADIUS_MM` (`0.0` mm),
+`SEGMENTATION_SMOOTHING_SIGMA_MM` (`1.0` mm), and
 `SEGMENTATION_SMOOTHING_THRESHOLD` (`0.5`). A zero radius or sigma skips that
 operation. Closing can join nearby fragments, but its radius is not an exact
 maximum gap distance: the result also depends on fragment geometry. Increase
 the radius cautiously if real parts remain disconnected. Spacing is handled
 in physical units, including anisotropic voxels.
+
+Thyroid uses `SEGMENTATION_CLOSING_RADIUS_MM` and
+`SEGMENTATION_SMOOTHING_SIGMA_MM` (currently `0.0` and `1.0` mm in config).
+Nodules use their own `SEGMENTATION_NODULE_SMOOTHING_SIGMA_MM` (initial value
+`0.4` mm; zero disables their smoothing). Both classes use the shared
+`SEGMENTATION_SMOOTHING_THRESHOLD`. The nodule sigma is saved in the NPZ
+processing metadata, along with each class's actual smoothing sigma and counts.
 
 Postprocessing changes the saved labels used by surfaces and viewing.
 Intensity and ground truth are unaffected. Reconstruction `weights` still
@@ -268,8 +287,18 @@ Run it without rerunning preparation, segmentation or reconstruction:
 .venv/bin/python -m src.registration.align_surfaces --case 003_01
 ```
 
-Optional controls are `--class-id 1`, `--model unet`,
+The alignment viewer always fits thyroid (class 1). Optional controls are
+`--class-id 1` (only 1 is accepted), `--model unet`,
 `--method voxel_nearest`, `--samples 8000`, and `--overlap 0.9`.
+Shared defaults for the pipeline, standalone alignment, and both evaluations
+are in the surface alignment section of `config.py`: `ALIGN_SAMPLES` (8000 per
+surface), `ALIGN_COARSE_SAMPLES` (1500), `ALIGN_COARSE_ITERATIONS` (60),
+`ALIGN_FINE_ITERATIONS` (150), `ALIGN_FINE_CANDIDATES` (4), `ALIGN_OVERLAP` (0.9),
+`ALIGN_RANDOM_SEED` (0).
+The sample/overlap CLI flags override their config defaults for that run.
+Higher sample counts can resolve smaller surface details but increase runtime;
+more iterations only help if ICP has not already converged. Convergence
+tolerances remain internal to ICP.
 Overlap is the nearest correspondence fraction retained **in each direction**
 during ICP and candidate scoring; it is not an estimate of acquisition coverage.
 `--overlap 1` uses all correspondences. For a very incomplete reconstruction,
@@ -285,9 +314,17 @@ to the GT mesh's XYZ coordinates. Both inputs retain their original files.
 Existing meshes use local physical coordinates, so this estimates shape
 alignment rather than recovering DICOM/world registration.
 
-Napari displays GT in green and the aligned reconstruction in magenta.
-The cyan reconstruction before alignment is initially hidden; toggle it in
-the layer list to compare. Mesh XYZ coordinates are converted to Napari ZYX.
+Napari displays every available class from both GT and predicted surface folders.
+Thyroid GT is green and the aligned reconstruction is magenta. All GT nodules
+are yellow; all reconstructed nodules are blue. Each class has one surface layer
+per source, so separate nodules share the same color. Nodules are opaque and
+thyroid remains translucent. A class present only in GT or only in prediction
+is still displayed. Every predicted class receives the same rigid transform
+computed from thyroid; nodules are never aligned independently in this viewer.
+Before-alignment reconstruction layers are initially hidden (thyroid cyan,
+nodules red); toggle them in the layer list to compare. Mesh XYZ coordinates
+are converted to Napari ZYX. Only the fitted thyroid mesh is saved in the
+aligned folder; other classes are transformed for display from original meshes.
 
 In `main.py`, `RUN_ALIGN_SURFACES = True` performs this step after surface
 extraction, using `VIS_CASE` or the first selected case and the first selected

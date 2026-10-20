@@ -23,6 +23,7 @@ from config import (
     SEGMENTATION_POSTPROCESS_ENABLED,
     SEGMENTATION_CLOSING_RADIUS_MM,
     SEGMENTATION_SMOOTHING_SIGMA_MM,
+    SEGMENTATION_NODULE_SMOOTHING_SIGMA_MM,
     SEGMENTATION_SMOOTHING_THRESHOLD,
     SPLINE_ORDER,
     VNN_MEAN_N_NEAREST,
@@ -165,12 +166,14 @@ def reconstruct_segmentation_case(
                 spacing_zyx=np.asarray(voxel)[::-1],
                 closing_radius_mm=SEGMENTATION_CLOSING_RADIUS_MM,
                 smoothing_sigma_mm=SEGMENTATION_SMOOTHING_SIGMA_MM,
+                nodule_smoothing_sigma_mm=SEGMENTATION_NODULE_SMOOTHING_SIGMA_MM,
                 smoothing_threshold=SEGMENTATION_SMOOTHING_THRESHOLD,
             )
         volume = processed_volume
         postprocessing.update(
             closing_radius_mm=SEGMENTATION_CLOSING_RADIUS_MM,
             smoothing_sigma_mm=SEGMENTATION_SMOOTHING_SIGMA_MM,
+            nodule_smoothing_sigma_mm=SEGMENTATION_NODULE_SMOOTHING_SIGMA_MM,
             smoothing_threshold=SEGMENTATION_SMOOTHING_THRESHOLD,
             classes=class_report,
         )

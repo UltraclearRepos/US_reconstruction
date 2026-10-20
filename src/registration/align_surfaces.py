@@ -13,6 +13,13 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from config import (
+    ALIGN_COARSE_ITERATIONS,
+    ALIGN_COARSE_SAMPLES,
+    ALIGN_FINE_CANDIDATES,
+    ALIGN_FINE_ITERATIONS,
+    ALIGN_OVERLAP,
+    ALIGN_RANDOM_SEED,
+    ALIGN_SAMPLES,
     SEGMENTATION_MODEL_NAME,
     SEGMENTATION_RECONSTRUCTION_METHOD,
     SURFACES_DIR,
@@ -20,10 +27,6 @@ from config import (
 from src.utils.logging import log_io, timed_stage
 from src.utils.paths import ground_truth_surface_dir, predicted_surface_dir
 from src.visualization.qt_environment import prepare_qt_environment
-
-
-DEFAULT_SAMPLES = 8000
-DEFAULT_OVERLAP = 0.9
 
 
 @dataclass
@@ -172,8 +175,8 @@ def icp(source, target, initial, overlap, iterations):
     return best_score, best
 
 
-def align_point_clouds(source, target, overlap=DEFAULT_OVERLAP, verbose=True):
-    """Refine all PCA starts coarsely, then the best four at full sample density."""
+def align_point_clouds(source, target, overlap=ALIGN_OVERLAP, verbose=True):
+    """Refine PCA starts coarsely, then shortlisted candidates at full density."""
     source = np.asarray(source, dtype=np.float64)
     target = np.asarray(target, dtype=np.float64)
     if (source.ndim != 2 or target.ndim != 2
@@ -183,24 +186,34 @@ def align_point_clouds(source, target, overlap=DEFAULT_OVERLAP, verbose=True):
         raise ValueError("Alignment needs finite (N, 3) point arrays with N >= 3.")
     if not np.isfinite(overlap) or not 0 < overlap <= 1:
         raise ValueError("Overlap must be in (0, 1].")
-    coarse_source = source[:min(1500, len(source))]
-    coarse_target = target[:min(1500, len(target))]
+    if (not isinstance(ALIGN_COARSE_SAMPLES, (int, np.integer))
+            or ALIGN_COARSE_SAMPLES < 3):
+        raise ValueError("ALIGN_COARSE_SAMPLES must be an integer >= 3.")
+    for name, value in (("ALIGN_COARSE_ITERATIONS", ALIGN_COARSE_ITERATIONS),
+                        ("ALIGN_FINE_ITERATIONS", ALIGN_FINE_ITERATIONS),
+                        ("ALIGN_FINE_CANDIDATES", ALIGN_FINE_CANDIDATES)):
+        if not isinstance(value, (int, np.integer)) or value < 1:
+            raise ValueError(f"{name} must be a positive integer.")
+    coarse_source = source[:min(ALIGN_COARSE_SAMPLES, len(source))]
+    coarse_target = target[:min(ALIGN_COARSE_SAMPLES, len(target))]
     starts = list(initial_transforms(source, target))
     candidates = []
     for index, initial in enumerate(starts, 1):
-        candidates.append(icp(coarse_source, coarse_target, initial, overlap, 60))
+        candidates.append(icp(coarse_source, coarse_target, initial, overlap,
+                              ALIGN_COARSE_ITERATIONS))
         if verbose and (index % 5 == 0 or index == len(starts)):
             print(f"[ALIGN] Initial orientations: {index}/{len(starts)}", flush=True)
     candidates.sort(key=lambda result: result[0])
     target_tree = cKDTree(target)
     best = (alignment_score(source, target, target_tree, np.eye(4), overlap),
             np.eye(4))
-    for index, (_, initial) in enumerate(candidates[:4], 1):
-        candidate = icp(source, target, initial, overlap, 150)
+    fine_count = min(ALIGN_FINE_CANDIDATES, len(candidates))
+    for index, (_, initial) in enumerate(candidates[:fine_count], 1):
+        candidate = icp(source, target, initial, overlap, ALIGN_FINE_ITERATIONS)
         if candidate[0] < best[0]:
             best = candidate
         if verbose:
-            print(f"[ALIGN] Fine ICP: {index}/4", flush=True)
+            print(f"[ALIGN] Fine ICP: {index}/{fine_count}", flush=True)
     return best[1]
 
 
@@ -210,24 +223,46 @@ def mean_sample_distance(source, target, transform):
                         + cKDTree(moved).query(target)[0].mean()))
 
 
-def show_alignment(gt_mesh, pred_mesh, aligned_vertices, case_name):
+def show_alignment(result, case_name):
+    """Show every available class using the one thyroid alignment transform."""
     prepare_qt_environment()
     import napari
 
     viewer = napari.Viewer(ndisplay=3, title=f"Surface alignment: {case_name}")
     viewer.dims.axis_labels = ("z (mm)", "y (mm)", "x (mm)")
-    # Pipeline mesh files use XYZ; Napari spatial axes follow ZYX.
-    for name, vertices, faces, color, visible in (
-        ("GT", *gt_mesh, "green", True),
-        ("Reconstruction aligned", aligned_vertices, pred_mesh[1], "magenta", True),
-        ("Reconstruction before alignment", *pred_mesh, "cyan", False),
-    ):
+    colors = {1: ("green", "magenta", "cyan"), 2: ("yellow", "blue", "red")}
+    names = {1: "thyroid", 2: "nodules"}
+
+    def add_mesh(mesh, name, color, visible, class_id):
+        vertices, faces = mesh
+        # Pipeline mesh files use XYZ; Napari spatial axes follow ZYX.
         viewer.add_surface(
             (vertices[:, ::-1].astype(np.float32), faces,
              np.ones(len(vertices), dtype=np.float32)),
             name=name, colormap=color, contrast_limits=(0, 1),
-            opacity=0.55, shading="smooth", visible=visible,
+            opacity=0.55 if class_id == 1 else 1.0,
+            shading="smooth", visible=visible,
         )
+
+    # Read GT and prediction independently: a class may exist on only one side.
+    for directory, is_gt in ((result.gt_path.parent, True), (result.pred_path.parent, False)):
+        for path in sorted(directory.glob("class_*_surface.npz")):
+            class_text = path.stem.removeprefix("class_").removesuffix("_surface")
+            if not class_text.isdigit() or int(class_text) == 0:
+                continue
+            class_id = int(class_text)
+            label = names.get(class_id, f"class {class_id}")
+            gt_color, aligned_color, before_color = colors.get(class_id, ("gray", "red", "cyan"))
+            if class_id == 1:
+                mesh = result.gt_mesh if is_gt else result.pred_mesh
+            else:
+                mesh = load_surface(path)
+            if is_gt:
+                add_mesh(mesh, f"GT {label}", gt_color, True, class_id)
+            else:
+                aligned = (transform_points(mesh[0], result.transform_xyz), mesh[1])
+                add_mesh(aligned, f"Reconstruction aligned {label}", aligned_color, True, class_id)
+                add_mesh(mesh, f"Reconstruction before alignment {label}", before_color, False, class_id)
     viewer.reset_view()
     napari.run()
 
@@ -237,12 +272,12 @@ def compute_case_alignment(
     model_name=SEGMENTATION_MODEL_NAME,
     reconstruction_method=SEGMENTATION_RECONSTRUCTION_METHOD,
     class_id=1,
-    samples=DEFAULT_SAMPLES,
-    overlap=DEFAULT_OVERLAP,
+    samples=ALIGN_SAMPLES,
+    overlap=ALIGN_OVERLAP,
 ):
     """Always compute from original meshes; never read a saved alignment."""
-    if samples < 100:
-        raise ValueError("Use at least 100 surface samples.")
+    if not isinstance(samples, (int, np.integer)) or samples < 100:
+        raise ValueError("Use an integer count of at least 100 surface samples.")
     if not np.isfinite(overlap) or not 0 < overlap <= 1:
         raise ValueError("Overlap must be in (0, 1].")
     filename = f"class_{class_id}_surface.npz"
@@ -252,7 +287,11 @@ def compute_case_alignment(
     with timed_stage("ALIGN SURFACES"):
         gt_mesh = load_surface(gt_path)
         pred_mesh = load_surface(pred_path)
-        rng = np.random.default_rng(0)
+        print(f"[ALIGN] samples={samples}, coarse_samples={min(ALIGN_COARSE_SAMPLES, samples)}, "
+              f"iterations={ALIGN_COARSE_ITERATIONS}/{ALIGN_FINE_ITERATIONS}, "
+              f"fine_candidates={ALIGN_FINE_CANDIDATES}, overlap={overlap}, "
+              f"seed={ALIGN_RANDOM_SEED}", flush=True)
+        rng = np.random.default_rng(ALIGN_RANDOM_SEED)
         target = sample_surface(*gt_mesh, samples, rng)
         source = sample_surface(*pred_mesh, samples, rng)
         before = mean_sample_distance(source, target, np.eye(4))
@@ -272,10 +311,12 @@ def align_and_view_case(
     model_name=SEGMENTATION_MODEL_NAME,
     reconstruction_method=SEGMENTATION_RECONSTRUCTION_METHOD,
     class_id=1,
-    samples=DEFAULT_SAMPLES,
-    overlap=DEFAULT_OVERLAP,
+    samples=ALIGN_SAMPLES,
+    overlap=ALIGN_OVERLAP,
     show=True,
 ):
+    if class_id != 1:
+        raise ValueError("The alignment viewer fits thyroid (class 1) and displays all classes")
     result = compute_case_alignment(case_name, model_name, reconstruction_method,
                                     class_id, samples, overlap)
     output = (SURFACES_DIR / "aligned" / case_name / model_name
@@ -291,7 +332,7 @@ def align_and_view_case(
     print(f"[ALIGN] Saved: {output}")
     if show:
         with timed_stage("NAPARI SURFACE ALIGNMENT"):
-            show_alignment(result.gt_mesh, result.pred_mesh, result.aligned_vertices, case_name)
+            show_alignment(result, case_name)
     return output
 
 
@@ -300,9 +341,10 @@ def main():
     parser.add_argument("--case", required=True, help="Acquisition name, e.g. 003_01")
     parser.add_argument("--model", default=SEGMENTATION_MODEL_NAME)
     parser.add_argument("--method", default=SEGMENTATION_RECONSTRUCTION_METHOD)
-    parser.add_argument("--class-id", type=int, default=1)
-    parser.add_argument("--samples", type=int, default=DEFAULT_SAMPLES)
-    parser.add_argument("--overlap", type=float, default=DEFAULT_OVERLAP,
+    parser.add_argument("--class-id", type=int, choices=[1], default=1,
+                        help="Fit thyroid (1); display every available class with the same transform")
+    parser.add_argument("--samples", type=int, default=ALIGN_SAMPLES)
+    parser.add_argument("--overlap", type=float, default=ALIGN_OVERLAP,
                         help="Nearest correspondence fraction retained in each direction (0, 1]")
     parser.add_argument("--no-view", action="store_true", help="Save alignment without opening Napari")
     args = parser.parse_args()
